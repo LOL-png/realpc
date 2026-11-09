@@ -66,6 +66,7 @@ for epp in a.episodes:
     robot_T = np.zeros((len(ticks), len(arms.bodies), 4, 4), np.float32)
     obj_T = np.full((P, len(ticks), 4, 4), np.nan, np.float32); obj_res = np.full((P, len(ticks), 2), np.nan, np.float32)
     obj_held = np.zeros((P, len(ticks)), np.int8)
+    obj_support = np.zeros((P, len(ticks), 2), np.int32); obj_mode = np.full((P, len(ticks)), "", dtype="<U16")
     qL = np.zeros((len(ticks), 7)); qR = np.zeros((len(ticks), 7))
     for k, t in enumerate(ticks):
         frames = {}
@@ -76,13 +77,14 @@ for epp in a.episodes:
         robot_T[k] = o["robot_T"]; qL[k] = o["q"]["left"]; qR[k] = o["q"]["right"]
         for i, n in enumerate(names):
             obj_T[i, k] = o["obj_T"][n]; obj_res[i, k] = o["obj_res"][n]; obj_held[i, k] = o["obj_held"][n]
+            obj_support[i, k] = o.get("obj_support", {}).get(n, (0, 0)); obj_mode[i, k] = o.get("obj_mode", {}).get(n, "")
     for c in ds:
         ds[c].close()
     res = dict(ticks=ticks, t_cap=ep.low["t_cap"][ticks], q_left=qL.astype(np.float32), q_right=qR.astype(np.float32),
                robot_local=arms.local.astype(np.float32), robot_body=arms.body.astype(np.int16),
                robot_bodies=np.array([f"{x}/{y}" for x, y in arms.bodies]), robot_T=robot_T,
                obj_names=np.array(names), obj_T=obj_T, obj_res=obj_res, obj_held=obj_held,
-               obj_valid=np.isfinite(obj_T[:, :, 0, 0]),
+               obj_valid=np.isfinite(obj_T[:, :, 0, 0]), obj_support=obj_support, obj_mode=obj_mode,
                static_points=conv.static[0], static_color=conv.static[1],
                task=ep.task, episode=ep.name, calib=os.path.basename(a.calib), const_lag=cal.const_lag, commit=commit,
                causal=True, start=a.start, cold=a.cold)
