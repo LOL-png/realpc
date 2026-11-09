@@ -145,6 +145,14 @@ class MeshTracker:
         self.cfg.update(cfg or {})
         self.prev = None                            # previous tick's views (for flow / track Kabsch)
         self.tick = -1
+        self.previous_grip = {}
+        self.first_tick = None
+        self.initial_hypotheses = {}
+        self.close_until = {}
+        self.previous_G = {}
+        self.contact_votes = {}
+        self.carrier_votes = {}
+        self.acquire_held = False
         self.lib_points, self.region, self.plane, self.bg_colors, self._cm = None, None, None, None, {}
 
     # -------------------------------------------------------------- robot
@@ -174,6 +182,24 @@ class MeshTracker:
             zs = [v.zbuf(r["V"], self.arm.faces) for r in rob.values()]
             z = torch.stack([torch.where(x > 0, x, torch.full_like(x, 1e9)) for x in zs]).amin(0)
             robot_z.append(z.cpu().numpy())
+        if self.first_tick is None:
+            self.first_tick=t
+            self.acquire_held=bool(self.initial_hypotheses)
+        for name,hypotheses in self.initial_hypotheses.items():
+            if hypotheses:
+                lid=list(self.objs).index(name)+1
+                Tn,ib,ia=self.sil_refine(self.objs[name],self.state[name].T,views,robot_z,lid,
+                                        alternatives=[np.asarray(H) for H in hypotheses])
+                if Tn is not None and ia>.3:
+                    self.state[name].T=Tn
+        self.initial_hypotheses={}
+        # Direct grasps require a recent closing event (or tight cold-start contact).
+        # One gripper cannot independently rigidly attach the tool AND a nearby block.
+        first_tick = not self.previous_grip
+        for a,r in rob.items():
+            if self.previous_grip.get(a,r["grip"]) - r["grip"] > .015:
+                self.close_until[a] = t + 10
+        busy = {st.held for st in self.state.values() if st.held is not None}
         # 1. prediction + grasp / release logic
         for name, st in self.state.items():
             o = self.objs[name]
@@ -182,18 +208,25 @@ class MeshTracker:
             if st.held is not None:
                 r = rob[st.held]
                 if r["grip"] > st.grip_at_grasp + self.cfg["release_open"]:
+                    busy.discard(st.held)
                     st.held, st.T_grip_obj = None, None              # released: stays where it is
                 else:
                     st.T = r["G"] @ st.T_grip_obj
             else:
                 tree = cKDTree(P)
                 for arm_, r in rob.items():
+                    if arm_ in busy:
+                        continue
                     d = np.array([tree.query(f)[0].min() for f in r["fingers"]])
-                    if d.max() < self.cfg["grasp_tip"] and r["grip"] < 1.0 - self.cfg["grip_close"]:
+                    closing = t <= self.close_until.get(arm_, -1)
+                    cold_contact = t-self.first_tick < 5 and d.max() < .015
+                    if (closing or cold_contact) and d.max() < self.cfg["grasp_tip"] and r["grip"] < 1.0 - self.cfg["grip_close"]:
                         st.held = arm_
                         st.grip_at_grasp = r["grip"]
                         st.T_grip_obj = np.linalg.inv(r["G"]) @ st.T
+                        busy.add(arm_)
                         break
+        self.previous_grip = {a:r["grip"] for a,r in rob.items()}
         # object z-buffers (inter-object occlusion), with predicted poses
         obj_z = {}
         for name, st in self.state.items():
@@ -222,12 +255,8 @@ class MeshTracker:
                 dmin = tree.query(Q, distance_upper_bound=0.02)[0].min()
                 if dmin < 0.02:
                     carriers.append(dT)
-                    # carried: in contact with an object a gripper moves fast (e.g. debris in a lifted dustpan)
-                    if (st.held is None and st.carrier is None and self.state[other].held is not None
-                            and np.linalg.norm(o.mesh.extents) < 0.5 * np.linalg.norm(self.objs[other].mesh.extents)
-                            and dmin < 0.015 and np.linalg.norm(dT[:3, 3]) > 0.005):
-                        st.carrier = other
-                        st.T_car_obj = np.linalg.inv(prevT[other]) @ st.T
+                    # Contact generates a motion hypothesis only. Actual carrier
+                    # attachment is confirmed below from observed co-motion.
             if st.carrier is not None:
                 car = self.state[st.carrier]
                 if car.held is None and np.linalg.norm(moved.get(st.carrier, np.eye(4))[:3, 3]) < 0.002:
@@ -249,6 +278,17 @@ class MeshTracker:
             st.mode = ("+".join(v.name for v, m_ in zip(views, Ms) if len(m_) >= self.cfg["cam_min_pts"]) or
                        ("fk" if st.held is not None else ("carrier" if st.carrier is not None else "hold")))
             mask_prediction = st.T.copy()
+            if len(M) >= self.cfg["mask_min_pts"] and st.held is None:
+                nearest = cKDTree(o.samples @ st.T[:3,:3].T + st.T[:3,3]).query(M)[0]
+                if np.median(nearest) > .035 and (st.carrier is not None or st.lost >= 2):
+                    # Mask identity comes from current causal segmentation. A physical
+                    # carrier relationship is revoked when both geometry and imagery disagree.
+                    from .cold_pose import register_components
+                    Pl, Cl = self.lib_points[name] if self.lib_points is not None else (o.icp_pts,np.full_like(o.icp_pts,.5))
+                    Tr, fit, rmse, _ = register_components(Pl,Cl,M,np.full_like(M,.5))
+                    if fit > .3 and rmse < .009:
+                        st.T = Tr; st.carrier = None; st.T_car_obj = None; st.relocs += 1
+                        mask_prediction = Tr.copy()
             if len(M) >= self.cfg["mask_min_pts"]:
                 if st.held is not None:
                     G = rob[st.held]["G"]
@@ -382,6 +422,42 @@ class MeshTracker:
             moved[name] = st.T @ np.linalg.inv(prevT[name])
             out[name] = st.T.copy()
             st.history.append(st.T.copy())
+        # A block near a moving tool is not necessarily riding it. Require observed
+        # contact and co-motion over three ticks before assigning a rigid carrier.
+        for name,st in self.state.items():
+            if st.held is not None or st.carrier is not None or sum(st.support.values())<60:
+                continue
+            o=self.objs[name];W=o.samples@st.T[:3,:3].T+st.T[:3,3];tree=cKDTree(W)
+            for parent,car in self.state.items():
+                if parent==name or car.held is None or np.linalg.norm(o.mesh.extents)>=.5*np.linalg.norm(self.objs[parent].mesh.extents):
+                    continue
+                pred=car.T@np.linalg.inv(prevT[parent])@prevT[name]
+                Q=self.objs[parent].samples[::3]@car.T[:3,:3].T+car.T[:3,3]
+                near=tree.query(Q)[0].min()<.020
+                moving=np.linalg.norm(st.T[:3,3]-prevT[name][:3,3])>.0015
+                agrees=np.linalg.norm(st.T[:3,3]-pred[:3,3])<.008
+                key=(name,parent);self.carrier_votes[key]=self.carrier_votes.get(key,0)+1 if near and moving and agrees else 0
+                if self.carrier_votes[key]>=3:
+                    st.carrier=parent;st.T_car_obj=np.linalg.inv(car.T)@st.T;break
+        # During cold acquisition, a partly hidden handle may miss the tight initial
+        # contact gate. Confirm attachment from three current/past co-motion observations.
+        if self.acquire_held and t-self.first_tick<60 and self.previous_G:
+            busy={s.held for s in self.state.values() if s.held is not None}
+            for name,st in self.state.items():
+                if st.held is not None or st.carrier is not None or sum(st.support.values())<60:
+                    continue
+                W=self.objs[name].samples@st.T[:3,:3].T+st.T[:3,3];tree=cKDTree(W)
+                for arm_,r in rob.items():
+                    if arm_ in busy or r["grip"]>=.85:continue
+                    oldG=self.previous_G[arm_];G=r["G"]
+                    U=np.linalg.inv(G)@st.T;U0=np.linalg.inv(oldG)@prevT[name]
+                    near=max(tree.query(f)[0].min() for f in r["fingers"])<.035
+                    moving=np.linalg.norm(G[:3,3]-oldG[:3,3])>.0015 and np.linalg.norm(st.T[:3,3]-prevT[name][:3,3])>.001
+                    consistent=np.linalg.norm(U[:3,3]-U0[:3,3])<.008 and np.linalg.norm(U[:3,:3]-U0[:3,:3])<.15
+                    key=(name,arm_);self.contact_votes[key]=self.contact_votes.get(key,0)+1 if near and moving and consistent else 0
+                    if self.contact_votes[key]>=3:
+                        st.held=arm_;st.grip_at_grasp=r["grip"];st.T_grip_obj=U;busy.add(arm_);break
+        self.previous_G={a:r["G"].copy() for a,r in rob.items()}
         self.prev = views
         return out
 

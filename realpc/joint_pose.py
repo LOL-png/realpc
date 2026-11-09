@@ -34,6 +34,7 @@ def refine_contours(o, T, views, robot_z, lid, alternatives=(), rounds=3):
         score,per,z=render(alt)
         if score>best:T=alt.copy();best=score;per0=per;zs=z
     base=T.copy();bestT=T.copy();start_per=per0
+    if best>=.91:return bestT,original,float(best)
     units=np.array([.15,.15,.15,.02,.02,.02])
     for _ in range(rounds):
         pairs=[]

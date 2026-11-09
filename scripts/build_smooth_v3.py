@@ -73,9 +73,9 @@ def build(name):
  if name=='mug':
   # Lip rounded in profile; hollow interior with a 2.5mm wall and 4mm base.
   p=[(.0001,-.037),(.034,-.037),(.039,-.034),(.0425,.033),(.043,.037),(.042,.039),(.0405,.039),(.040,.037),(.038,-.030),(.034,-.033),(.0001,-.033)]
-  cup=color(lathe(p),[205,83,19]);th=np.linspace(-np.pi/2,np.pi/2,55)
-  path=np.c_[.040+.027*np.cos(th),np.zeros(len(th)),.029*np.sin(th)]
-  h=tube(path,.005,.007,[205,83,19]);h.apply_transform(trimesh.transformations.rotation_matrix(-.50,[0,0,1]));m=trimesh.util.concatenate([cup,h])
+  p=[(r*.96,z*1.25) for r,z in p];cup=color(lathe(p),[205,83,19]);th=np.linspace(-np.pi/2,np.pi/2,55)
+  path=np.c_[.040+.027*np.cos(th),np.zeros(len(th)),.025+.020*np.sin(th)]
+  h=tube(path,.005,.007,[205,83,19]);h.apply_transform(trimesh.transformations.rotation_matrix(-.13,[0,0,1]));m=trimesh.util.concatenate([cup,h])
   z=np.array([-.86,.02,.51]);z/=np.linalg.norm(z);x=np.array([0.,0.,1]);x-=z*x.dot(z);x/=np.linalg.norm(x);y=np.cross(z,x)
   R=np.stack([x,y,z],1);m.vertices=np.asarray(m.vertices)@R.T+np.array([.003,.002,-.006]);return m
  if name=='stand':

@@ -9,11 +9,11 @@ ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 from realpc.diffcalib import Renderer,se3_exp,soft_iou
 from realpc.calib_rig import RigCalib
 from realpc.io import Episode,read_depth_frames
-p=argparse.ArgumentParser();p.add_argument('--task',required=True);p.add_argument('--names',nargs='+');p.add_argument('--steps',type=int,default=65);p.add_argument('--out',required=True);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--task',required=True);p.add_argument('--names',nargs='+');p.add_argument('--steps',type=int,default=65);p.add_argument('--out',required=True);p.add_argument('--seg',default='/home/howardji/data_ext/realpc_v4/seg');a=p.parse_args()
 torch.set_num_threads(2);cal=RigCalib.load(ROOT/'configs/calib_yam_rig_v3.json');ep=Episode('/home/howardji/data_ext/agentwm_probe/hf/'+a.task+'/episode_0000');lib=ROOT/'assets/objects_v3'/a.task
 views=[]
 for cam in ['top','side']:
- z=np.load('/home/howardji/data_ext/realpc_v4/seg/'+a.task+'/episode_0000_'+cam+'.npz');L=z['labels'][0];names=list(z['names']);W=320;H=round(L.shape[0]*W/L.shape[1]);lab=cv2.resize(L,(W,H),interpolation=cv2.INTER_NEAREST)
+ z=np.load(a.seg+'/'+a.task+'/episode_0000_'+cam+'.npz');L=z['labels'][0];names=list(z['names']);W=320;H=round(L.shape[0]*W/L.shape[1]);lab=cv2.resize(L,(W,H),interpolation=cv2.INTER_NEAREST)
  K=ep.intrinsics(cam).copy();K[:2]*=W/(1280 if cam=='top' else 640);R=Renderer(K,H,W)
  D=read_depth_frames(ep.path+'/'+cam+'_depth.mkv',[0])[0].astype(np.float32)*float(ep.meta['depth_scale'][cam]);D=cv2.resize(D,(W,H),interpolation=cv2.INTER_NEAREST)
  views.append((cam,R,lab,names,torch.tensor(D,device='cuda'),torch.tensor(cal.T_cam_base(cam,'left'),dtype=torch.float32,device='cuda')))

@@ -30,6 +30,7 @@ ap.add_argument("--calib", default=os.path.join(ROOT, "configs", "calib_yam_rig_
 ap.add_argument("--assets", default=os.path.join(ROOT, "assets", "objects"))
 ap.add_argument("--sam_ckpt", default=os.path.join(ROOT, ".model_cache", "sam2", "sam2.1_hiera_small.pt"))
 ap.add_argument("--cold", action="store_true")
+ap.add_argument("--image-refine-seeds", action="store_true", help="infer initial silhouettes from RGB using mesh-derived boxes/points, instead of copying mesh masks")
 a = ap.parse_args()
 from sam2.build_sam import build_sam2_video_predictor  # noqa: E402
 
@@ -111,8 +112,90 @@ for c in ("top", "side"):
         state = model.init_state(tmp, offload_video_to_cpu=True, offload_state_to_cpu=True)
         state["images"] = Frames(ims, model.image_size); state["num_frames"] = len(ims)
         state["video_height"], state["video_width"] = h, w
+        if a.image_refine_seeds:
+            from sam2.sam2_image_predictor import SAM2ImagePredictor
+            image_predictor=SAM2ImagePredictor(model)
+            image_predictor.set_image(cv2.cvtColor(ims[0],cv2.COLOR_BGR2RGB))
         for oid, m in seeds.items():
-            model.add_new_mask(state, frame_idx=0, obj_id=int(oid), mask=m)
+            if a.image_refine_seeds and oid < 254:
+                # The renderer provides identity/location, not the final RGB silhouette.
+                # For a heavily occluded cold object, the visible seed may be only
+                # its neck. Use the amodal projected extent for the SAM box so the
+                # visible handle is not cropped away; positives still need depth.
+                box_mask = (zbufs[ids.index(oid)] > 0) if a.cold else m
+                yy, xx = np.nonzero(box_mask)
+                pad = max(8, int(.12 * max(xx.max()-xx.min(), yy.max()-yy.min())))
+                box = np.array([max(0,xx.min()-pad), max(0,yy.min()-pad),
+                                min(w-1,xx.max()+pad), min(h-1,yy.max()+pad)], np.float32)
+                point_mask = m.copy()
+                if a.cold and oid < 254:
+                    observed=cv2.resize(frames0[c][0],(w,h),interpolation=cv2.INTER_NEAREST)
+                    predicted_depth=zbufs[ids.index(oid)]
+                    explained=m&(observed>.1)&(predicted_depth>0)&(np.abs(observed-predicted_depth)<.025)
+                    if explained.sum()>30:
+                        point_mask=explained
+                if oid < 254:
+                    from realpc import objlib
+                    rgb = cv2.cvtColor(ims[0],cv2.COLOR_BGR2RGB).reshape(-1,3).astype(float)/255
+                    ref = np.load(os.path.join(lib,conv.objs[int(oid)-1].name+"_points.npz"))["C"]
+                    probability = objlib.colour_model(ref,rgb[::40])(rgb).reshape(h,w)
+                    support = point_mask & (probability > max(.40,float(probability[point_mask].max())*.70))
+                    if support.sum()>30:
+                        point_mask=support
+                dist = cv2.distanceTransform(point_mask.astype(np.uint8), cv2.DIST_L2, 5)
+                y0,x0 = np.unravel_index(dist.argmax(),dist.shape)
+                points = [(x0,y0)]
+                py,px=np.nonzero(point_mask)
+                candidates = np.c_[px,py];clear = dist[py,px]
+                for _ in range(2):
+                    dd = np.min(np.linalg.norm(candidates[:,None,:]-np.array(points)[None],axis=2),axis=1)
+                    j = np.argmax(dd * np.minimum(clear/3.,1.))
+                    points.append(tuple(candidates[j]))
+                pos_count=len(points)
+                outside=~cv2.dilate(m.astype(np.uint8),np.ones((15,15),np.uint8)).astype(bool)
+                roi=np.zeros((h,w),bool);x1,y1,x2,y2=box.astype(int);roi[y1:y2+1,x1:x2+1]=True
+                outside &= roi
+                by,bx=np.nonzero(outside)
+                if len(bx):
+                    bg=np.c_[bx,by]
+                    for target in [(x1,y1),(x2,y1),(x1,y2),(x2,y2)]:
+                        points.append(tuple(bg[np.argmin(np.linalg.norm(bg-np.array(target),axis=1))]))
+                point_labels=np.r_[np.ones(pos_count,np.int32),np.zeros(len(points)-pos_count,np.int32)]
+                predicted, _, _ = image_predictor.predict(point_coords=np.asarray(points,np.float32),
+                    point_labels=point_labels,box=box,multimask_output=False)
+                refined = predicted[0].astype(bool)
+                if a.cold:
+                    # A prompted held object often includes its gripper. Known FK
+                    # robot depth removes that lobe before the seed-quality guard.
+                    robot_depth=np.minimum.reduce([np.where(zbufs[j]>0,zbufs[j],np.inf) for j,k in enumerate(ids) if k>=254])
+                    observed=cv2.resize(frames0[c][0],(w,h),interpolation=cv2.INTER_NEAREST)
+                    refined &= ~((robot_depth<np.inf)&(observed>.1)&(robot_depth<=observed+.012))
+                debug=ims[0].copy()
+                cv2.rectangle(debug,tuple(box[:2].astype(int)),tuple(box[2:].astype(int)),(255,0,0),2)
+                for ip,pt in enumerate(points):cv2.circle(debug,tuple(map(int,pt)),4,(0,255,0) if ip<pos_count else (255,0,255),-1)
+                debug[refined]=(.35*np.array([0,0,255])+.65*debug[refined]).astype(np.uint8)
+                cv2.imwrite(os.path.join(a.out_dir,f"{ep.task}_{ep.name}_{c}_seed{oid}.jpg"),debug)
+                if not a.cold:
+                    # Keep RGB boundary refinement local to a calibrated model prior;
+                    # discard attached background lobes outside that uncertainty band.
+                    refined &= cv2.dilate(m.astype(np.uint8),np.ones((17,17),np.uint8)).astype(bool)
+                coverage = (refined & m).sum() / max(1,m.sum())
+                # Cold pose hypotheses are uncertain: demanding 72% overlap with
+                # their rendered silhouette rejects correct image boundaries.
+                threshold = .25 if a.cold else .72
+                area_prior = box_mask.sum() if a.cold else m.sum()
+                if coverage < threshold or refined.sum() > 2.0*area_prior:
+                    # A boundary seed can hit background or only one material of a
+                    # multi-material object. Preserve the conservative original seed.
+                    refined = m
+                    print(f"{c} seed {oid}: image refinement rejected (coverage={coverage:.2f})",flush=True)
+                else:
+                    ncc, cc, stats, _ = cv2.connectedComponentsWithStats(refined.astype(np.uint8))
+                    keep = [j for j in range(1,ncc) if ((cc==j)&m).sum()>=20]
+                    refined = np.isin(cc,keep)
+                model.add_new_mask(state, frame_idx=0, obj_id=int(oid), mask=refined)
+            else:
+                model.add_new_mask(state, frame_idx=0, obj_id=int(oid), mask=m)
         for fi, oids, logits in model.propagate_in_video(state, start_frame_idx=0):
             x = logits[:, 0].float().cpu().numpy()
             best = np.argmax(x, 0); val = np.max(x, 0)
@@ -120,5 +203,5 @@ for c in ("top", "side"):
             labels[fi][val > 0] = lab[val > 0]
         model.reset_state(state)
     np.savez_compressed(os.path.join(a.out_dir, ep.task, f"{ep.name}_{c}.npz"), labels=labels, start=a.start,
-                        names=np.array([o.name for o in conv.objs]), seeds=np.array(sorted(seeds)))
+                        names=np.array([o.name for o in conv.objs]), seeds=np.array(sorted(seeds)), image_refined_seed=a.image_refine_seeds)
     print(f"{ep.task}/{ep.name} {c}: {len(ims)} frames, seeds {sorted(seeds)}, {time.time() - t0:.0f} s", flush=True)

@@ -3,11 +3,11 @@
   "name": "stand",
   "created": "2026-11-09T01:58:20",
   "watertight": true,
-  "volume_m3": 0.0003478865340205634,
+  "volume_m3": 0.00035354078578340005,
   "extents_m": [
-    0.17673803546514755,
-    0.163113258792479,
-    0.25623426950554645
+    0.17673803865909576,
+    0.16311325877904892,
+    0.2562342658638954
   ],
   "n_vertices": 966,
   "n_faces": 1920,
@@ -121,5 +121,6 @@
     1.0143423080444336,
     0.9681150317192078
   ],
-  "fit_masks": "causal SAM2 t0 only; no Q28 evaluation masks"
+  "fit_masks": "causal SAM2 t0 only; no Q28 evaluation masks",
+  "fit_views": "initial RGB-D, both fixed cameras; causal/image-refined masks, no Q28 masks"
 }
