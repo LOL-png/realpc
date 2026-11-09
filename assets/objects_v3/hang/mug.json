@@ -1,0 +1,125 @@
+{
+  "task": "hang",
+  "name": "mug",
+  "created": "2026-11-09T01:58:18",
+  "watertight": true,
+  "volume_m3": 6.339043187249338e-05,
+  "extents_m": [
+    0.10398674524948792,
+    0.08786862609055279,
+    0.11772784897617945
+  ],
+  "n_vertices": 1936,
+  "n_faces": 3868,
+  "fused_points": 3538,
+  "frame": "object frame = mesh centroid, axes parallel to the world (left arm base) frame of the reference episode at its first tick",
+  "T_world_obj_ref": [
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.5170155545306531
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      -0.24509270282214765
+    ],
+    [
+      0.0,
+      0.0,
+      1.0,
+      0.2392105883422003
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "reference_episode": "hang/episode_0000",
+  "calibration": "configs/calib_yam_rig_v3.json",
+  "shape": "smooth parametric/outline model",
+  "observed_surface_frac": 0.38524766304931773,
+  "n_views": 6,
+  "scans": [
+    {
+      "kind": "ref",
+      "episode": "hang/episode_0000",
+      "fitness": 1.0,
+      "rmse_mm": 0.0,
+      "points": 3815,
+      "surf_res_med_mm": 3.916193127236584,
+      "surf_res_p90_mm": 7.30992792328152,
+      "T_world_obj_t0": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.5170155545306531
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          -0.24509270282214765
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.2392105883422003
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    }
+  ],
+  "n_scans": 1,
+  "surf_res_med_mm_all": 3.916193127236584,
+  "version": "v3 smooth prior + shared-two-camera t0 fit",
+  "refine_views": 60,
+  "refine_tracks": [
+    "/home/howardji/data_ext/realpc_v4/trk/hang0_stand_static.npz"
+  ],
+  "unseen_geometry": "Prior-completed: backs, wall thickness, hidden peg and handle sections. Not measured surfaces.",
+  "fit_source": "v1 measured cloud dimensions + initial two-camera RGB; canonical v1 frame retained",
+  "mesh_fit_transform": [
+    [
+      0.9983700513839722,
+      0.05670465901494026,
+      0.006466098129749298,
+      0.004073473624885082
+    ],
+    [
+      -0.05695563927292824,
+      0.9971523284912109,
+      0.0494304858148098,
+      0.005167271010577679
+    ],
+    [
+      -0.0036447697784751654,
+      -0.04971819743514061,
+      0.9987566471099854,
+      -0.00644720857962966
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "mesh_fit_scale": [
+    0.9953321218490601,
+    0.9938437938690186,
+    1.0431817770004272
+  ],
+  "fit_masks": "causal SAM2 t0 only; no Q28 evaluation masks"
+}

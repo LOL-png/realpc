@@ -139,7 +139,7 @@ class MeshTracker:
         self.objs = {o.name: o for o in objects}
         self.state = {o.name: ObjState(np.asarray(init_poses[o.name], float)) for o in objects}
         self.arm = arm_model
-        self.cfg = dict(contact=0.03, grasp_tip=0.02, grip_close=0.15, release_open=0.15, icp_iters=6, huber=0.005, held_max_corr=0.01, held_blend=0.1, held_blend_mask=0.3, mask_min_pts=60, mask_move_gate=0.002, cam_min_pts=40, sil_refine=os.environ.get("REALPC_SIL", "0") == "1", sil_steps=8, sil_lr=2e-3,
+        self.cfg = dict(contact=0.03, grasp_tip=0.02, grip_close=0.15, release_open=0.15, icp_iters=6, huber=0.005, held_max_corr=0.01, held_blend=0.1, held_blend_mask=0.3, mask_min_pts=60, mask_move_gate=0.002, cam_min_pts=40, sil_refine=os.environ.get("REALPC_SIL", "0") == "1", sil_steps=int(os.environ.get("REALPC_SIL_STEPS", "12")), sil_lr=0.07,
                         sil_min_px=40, sil_min_gain=0.01, cam_equal_weight=os.environ.get("REALPC_CAM_EQUAL", "0") == "1",
                         max_corr=0.03, free_tol=0.015, min_inl=40, move_gate=0.003, flow=True)
         self.cfg.update(cfg or {})
@@ -248,13 +248,14 @@ class MeshTracker:
             st.support = sup
             st.mode = ("+".join(v.name for v, m_ in zip(views, Ms) if len(m_) >= self.cfg["cam_min_pts"]) or
                        ("fk" if st.held is not None else ("carrier" if st.carrier is not None else "hold")))
+            mask_prediction = st.T.copy()
             if len(M) >= self.cfg["mask_min_pts"]:
                 if st.held is not None:
                     G = rob[st.held]["G"]
                     T1, res = self.icp_masked(o, st.T, M, w=Mw)
                     dT = T1 @ np.linalg.inv(st.T)
                     dang = np.degrees(np.arccos(np.clip((np.trace(dT[:3, :3]) - 1) / 2, -1, 1)))
-                    if res[1] >= self.cfg["mask_min_pts"] and np.linalg.norm(dT[:3, 3]) < 0.03 and dang < 10:
+                    if res[1] >= self.cfg["mask_min_pts"] and np.linalg.norm(T1[:3, 3] - st.T[:3, 3]) < 0.03 and dang < 10:
                         T_new = np.linalg.inv(G) @ T1
                         a_ = self.cfg["held_blend_mask"]
                         Tb = st.T_grip_obj.copy()
@@ -290,7 +291,7 @@ class MeshTracker:
                         T1, res = best
                         st.lost = 0
                         dT = T1 @ np.linalg.inv(st.T)
-                        dmove = np.linalg.norm(dT[:3, 3])
+                        dmove = np.linalg.norm(T1[:3, 3] - st.T[:3, 3])
                         dang = np.degrees(np.arccos(np.clip((np.trace(dT[:3, :3]) - 1) / 2, -1, 1)))
                         # move on clear evidence only (no jitter of resting objects), never by jumps
                         if (dmove > self.cfg["mask_move_gate"] or dang > 1.5) and dmove < 0.08:
@@ -300,7 +301,7 @@ class MeshTracker:
                         st.last_res = res
                 # per-tick silhouette refinement against the masks of every camera that sees the object
                 if self.cfg["sil_refine"]:
-                    Tn, ib, ia = self.sil_refine(o, st.T, views, robot_z, lid)
+                    Tn, ib, ia = self.sil_refine(o, st.T, views, robot_z, lid, alternatives=[mask_prediction])
                     if Tn is not None and ia > ib + self.cfg["sil_min_gain"]:
                         if st.held is not None:
                             G = rob[st.held]["G"]
@@ -313,6 +314,22 @@ class MeshTracker:
                 out[name] = st.T.copy()
                 st.history.append(st.T.copy())
                 continue
+            if any(v.labels is not None for v in views):
+                if self.cfg["sil_refine"]:
+                    Tn, ib, ia = self.sil_refine(o, st.T, views, robot_z, lid)
+                    if Tn is not None and ia > ib + self.cfg["sil_min_gain"]:
+                        st.T = Tn
+                        if st.held is not None:
+                            st.T_grip_obj = np.linalg.inv(rob[st.held]["G"]) @ Tn
+                        elif st.carrier is not None:
+                            st.T_car_obj = np.linalg.inv(self.state[st.carrier].T) @ Tn
+                    st.sil_iou = (ib, ia)
+                # Both masks absent: preserve calibrated FK/carrier/last-pose prediction.
+                moved[name] = st.T @ np.linalg.inv(prevT[name])
+                out[name] = st.T.copy()
+                st.history.append(st.T.copy())
+                continue
+
             moving = (st.held is not None or near_robot or bool(carriers)) and st.carrier is None
             if moving:
                 cands = [st.T.copy()]
@@ -330,7 +347,7 @@ class MeshTracker:
                 if best is not None:
                     T1, res = best
                     dT = T1 @ np.linalg.inv(st.T)
-                    dmove = np.linalg.norm(dT[:3, 3])
+                    dmove = np.linalg.norm(T1[:3, 3] - st.T[:3, 3])
                     dang = np.degrees(np.arccos(np.clip((np.trace(dT[:3, :3]) - 1) / 2, -1, 1)))
                     if st.held is not None:
                         # held: the gripper FK carries the object; ICP may only correct small slip (<= 1 cm, 5 deg),
@@ -435,9 +452,12 @@ class MeshTracker:
                 break
         return T, res
 
-    def sil_refine(self, o, T, views, robot_z, lid):
+    def sil_refine(self, o, T, views, robot_z, lid, alternatives=()):
         """a few Adam steps on a 6-DoF correction (object frame) maximising the support-weighted soft-silhouette IoU
         with the object's mask in every camera (robot pixels and other objects ignored), prior to the current pose."""
+        if os.environ.get("REALPC_SIL_METHOD", "adam") == "contour":
+            from .joint_pose import refine_contours
+            return refine_contours(o, T, views, robot_z, lid, alternatives)
         from .diffcalib import se3_exp, soft_iou
         data = []
         for vi, v in enumerate(views):
@@ -456,29 +476,53 @@ class MeshTracker:
         if not data:
             return None, 0.0, 0.0
         T0 = torch.tensor(T, dtype=torch.float32, device="cuda")
+        # Dimensionless parameters: Adam must not give metres and radians the same step.
         d = torch.zeros(6, device="cuda", requires_grad=True)
+        units = torch.tensor([.15, .15, .15, .02, .02, .02], device="cuda")
         opt = torch.optim.Adam([d], lr=self.cfg["sil_lr"])
         V = o.verts_t
 
         def loss_iou(dd, sigma):
-            Tn = T0 @ se3_exp(dd)
+            Tn = T0 @ se3_exp(dd * units)
             Vw = V @ Tn[:3, :3].T + Tn[:3, 3]
             tot, wsum, ious = 0.0, 0.0, []
             for v, m, val, Tcw, wc in data:
-                sil, _ = v.R.raster((Vw @ Tcw[:3, :3].T + Tcw[:3, 3])[None], o.faces_t, sigma=sigma, fpp=6 if sigma else 1)
+                sil, _ = v.R.raster((Vw @ Tcw[:3, :3].T + Tcw[:3, 3])[None], o.faces_t,
+                                    sigma=sigma, fpp=8 if sigma else 1)
                 iou = soft_iou(sil, m, val)[0]
-                tot = tot + wc * (1 - iou); wsum += wc; ious.append(float(iou))
-            return tot / wsum, float(np.average(ious, weights=[x[4] for x in data]))
+                tot = tot + wc * (1 - iou); wsum += wc; ious.append(float(iou.detach()))
+            return tot / wsum, float(np.average(ious, weights=[x[4] for x in data])), ious
         with torch.no_grad():
-            _, i0 = loss_iou(d, None)
-        for _ in range(self.cfg["sil_steps"]):
-            l, _ = loss_iou(d, 2e-4)
-            l = l + 0.05 * ((d[3:] / 0.01) ** 2).sum() + 0.05 * ((d[:3] / 0.05) ** 2).sum()
+            _, i0, per0 = loss_iou(d, None)
+        # Reject ICP hypotheses which fit planar depth but lose the two-view silhouette.
+        original_i0 = i0
+        for alt in alternatives:
+            saved = T0
+            T0 = torch.tensor(alt, dtype=torch.float32, device="cuda")
+            with torch.no_grad():
+                _, ai, ap = loss_iou(d, None)
+            if ai > i0:
+                i0, per0 = ai, ap
+            else:
+                T0 = saved
+        best_i, best_d = i0, d.detach().clone()
+        for it in range(self.cfg["sil_steps"]):
+            # A large blur with a finite faces-per-pixel budget loses interior faces on
+            # dense thin meshes. 1e-6 reproduces their actual hard silhouette.
+            l, _, _ = loss_iou(d, 1e-6)
+            l = l + 0.003 * (d ** 2).sum()
             opt.zero_grad(); l.backward(); opt.step()
+            with torch.no_grad():
+                d.clamp_(-1.5, 1.5)
+                if (it + 1) % 4 == 0 or it == self.cfg["sil_steps"] - 1:
+                    _, ih, per = loss_iou(d, None)
+                    # Do not trade a large regression in a well-observed camera for
+                    # a gain in the other. Weak / occluded views are omitted above.
+                    if ih > best_i and all(q >= p - .08 for q, p in zip(per, per0)):
+                        best_i, best_d = ih, d.detach().clone()
         with torch.no_grad():
-            _, i1 = loss_iou(d, None)
-            Tn = (T0 @ se3_exp(d)).cpu().numpy().astype(float)
-        return Tn, i0, i1
+            Tn = (T0 @ se3_exp(best_d * units)).cpu().numpy().astype(float)
+        return Tn, original_i0, best_i
 
     def icp_masked(self, o, T, M, iters=10, w=None):
         """data -> model point-to-plane ICP of the object's masked depth points M (world) onto the mesh (object frame

@@ -71,7 +71,7 @@ class StreamConverter:
                         self.seg[c] = (z["labels"], int(z["start"]))
 
     # ------------------------------------------------------------------ first tick: object poses + static scene
-    def _init(self, t, frames):
+    def _init(self, t, frames, q=None):
         init = {}
         Ps, Cs = [], []
         region = json.load(open(os.path.join(self.ep.path, "table_region.json")))
@@ -106,7 +106,8 @@ class StreamConverter:
                                for o in self.objs}
         self.trk.region, self.trk.plane = region, self.ep.table_plane()
         # static scene = table-region points not explained by the robot or a library object
-        q = {a: self.cal.q_at(self.ep, a, self.cal.robot_tick(self.ep, "top", t)) for a in ("left", "right")}
+        if q is None:
+            q = {a: self.cal.q_at(self.ep, a, self.cal.robot_tick(self.ep, "top", t)) for a in ("left", "right")}
         R = self.arms.points(q)
         keep = objlib.robot_free(P, R, 0.03)
         for o in self.objs:
@@ -119,11 +120,17 @@ class StreamConverter:
         self.trk.bg_colors = C[idx][::3]                       # static-scene colours: negatives of the colour models
 
     # ------------------------------------------------------------------ per tick
-    def step(self, t, frames):
-        """frames: {"top": (depth_m, bgr), "side": (depth_m, bgr)} of tick t. -> dict for this tick."""
+    def step(self, t, frames, labels=None, q=None):
+        """Current RGB-D; optional current labels and calibrated, time-aligned joints.
+        Live callers supply labels and q; file replay supplies identical values from
+        causal SAM2 and joint history. q includes v3 offsets and the fixed 3-tick lag.
+        No future image, label or joint value enters the tracker.
+        """
         if self.trk is None:
-            self._init(t, frames)
+            self._init(t, frames, q=q)
         def lab(c):
+            if labels is not None:
+                return labels.get(c)
             if c not in self.seg:
                 return None
             L, s0 = self.seg[c]
@@ -136,7 +143,8 @@ class StreamConverter:
             views.append(CamView("side", frames["side"][0], self.ep.intrinsics("side"), self.cal.T_world_cam("side"), lowres=(240, 320),
                                  rgb=frames["side"][1], labels=lab("side")))
         tr = self.cal.robot_tick(self.ep, "top", t)
-        q = {a: self.cal.q_at(self.ep, a, tr) for a in ("left", "right")}
+        if q is None:
+            q = {a: self.cal.q_at(self.ep, a, tr) for a in ("left", "right")}
         poses = self.trk.step(t, views, q, self.T_world_base)
         out = {"q": q, "robot_T": self.arms.link_poses(q).astype(np.float32), "obj_T": {}, "obj_res": {}, "obj_held": {}}
         for o in self.objs:

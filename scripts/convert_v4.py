@@ -74,6 +74,8 @@ for epp in a.episodes:
             _, D = ds[c].next(); ok, im = caps[c].read()
             frames[c] = (D.astype(np.float32) * sc[c], im)
         o = conv.step(int(t), frames)
+        if k % 50 == 0:
+            print(f"{ep.task}/{ep.name} tick={t} elapsed={time.time()-t0:.1f}s", flush=True)
         robot_T[k] = o["robot_T"]; qL[k] = o["q"]["left"]; qR[k] = o["q"]["right"]
         for i, n in enumerate(names):
             obj_T[i, k] = o["obj_T"][n]; obj_res[i, k] = o["obj_res"][n]; obj_held[i, k] = o["obj_held"][n]
