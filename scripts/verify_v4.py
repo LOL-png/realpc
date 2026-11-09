@@ -80,7 +80,7 @@ for k in range(0, len(ticks), a.stride):
     for c in ("top", "side"):
         im = ims[c]
         Tcw = torch.tensor(np.linalg.inv(cal.T_world_cam(c)), dtype=torch.float32, device="cuda")
-        tc = t - (cal.lag(ep, c, t) if c == "side" else 0.0)       # side content time
+        tc = t - (cal.lag(ep, c, t) - cal.lag(ep, "top", t))           # content time relative to the top camera       # side content time
         kc = int(np.clip(round(tc - ticks[0]), 0, len(ticks) - 1))
         for i, o in enumerate(objs):
             if o.name not in names:
@@ -102,8 +102,19 @@ for k in range(0, len(ticks), a.stride):
             sil, _ = R[c].raster((V @ Tb[:3, :3].T + Tb[:3, 3])[None], tarm.faces)
             cs, _ = cv2.findContours((sil[0].cpu().numpy() > 0.5).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
             cv2.drawContours(im, cs, -1, cc, 1)
+        if "cloth_points" in d and d["cloth_valid"][kc]:
+            Pc_ = d["cloth_points"][:, kc][::4]
+            Tcw_n = np.linalg.inv(cal.T_world_cam(c))
+            X = Pc_ @ Tcw_n[:3, :3].T + Tcw_n[:3, 3]
+            Kc = ep.intrinsics(c).copy(); Kc[:2] *= 640 / (1280 if c == "top" else 640)
+            uv_ = (X @ Kc.T)[:, :2] / np.maximum(X[:, 2:], 1e-3)
+            for (uu_, vv_) in uv_[(X[:, 2] > 0.1)].astype(int):
+                if 0 <= uu_ < 640 and 0 <= vv_ < im.shape[0]:
+                    im[vv_, uu_] = (255, 255, 0)
         held = [n for i, n in enumerate(names) if d["obj_held"][i, kc] > 0]
-        txt = f"{ep.task}/{ep.name} {c} t={t}" + (f"  held: {','.join(held)}" if held else "")
+        if "cloth_points" in d:
+            held.append("cloth ok" if d["cloth_valid"][kc] else "cloth INVALID (fold)")
+        txt = f"{ep.task}/{ep.name} {c} t={t}" + (f"  {','.join(held)}" if held else "")
         cv2.putText(im, txt, (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 3); cv2.putText(im, txt, (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
         tiles.append(im)
     # 3D panel

@@ -122,7 +122,9 @@ class StreamConverter:
             return L[t - s0] if 0 <= t - s0 < len(L) else None
         views = [CamView("top", frames["top"][0], self.ep.intrinsics("top"), self.cal.T_world_cam("top"),
                          grey=cv2.cvtColor(frames["top"][1], cv2.COLOR_BGR2GRAY), rgb=frames["top"][1], labels=lab("top"))]
-        if "side" in frames and abs(self.cal.lag(self.ep, "side", t)) <= self.side_max_lag:
+        # side frames are used when their content time matches the top camera's (same lag); both cameras then show the
+        # robot at robot_tick(top) = t - lag
+        if "side" in frames and abs(self.cal.lag(self.ep, "side", t) - self.cal.lag(self.ep, "top", t)) <= self.side_max_lag:
             views.append(CamView("side", frames["side"][0], self.ep.intrinsics("side"), self.cal.T_world_cam("side"), lowres=(240, 320),
                                  rgb=frames["side"][1], labels=lab("side")))
         tr = self.cal.robot_tick(self.ep, "top", t)

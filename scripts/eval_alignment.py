@@ -57,7 +57,7 @@ for c in ("top", "side"):
             t = int(ticks[k])
             if t >= len(M):
                 break
-            tc = t - (cal.lag(ep, c, t) if c == "side" else 0.0)
+            tc = t - (cal.lag(ep, c, t) - cal.lag(ep, "top", t))           # content time relative to the top camera
             kc = int(np.clip(round(tc - ticks[0]), 0, len(ticks) - 1))
             T = d["obj_T"][pi, kc]
             if not np.isfinite(T).all():

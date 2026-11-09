@@ -110,10 +110,16 @@ for epp in a.episodes:
         Pk = Pk @ C[:3, :3].T.astype(np.float32) + C[:3, 3].astype(np.float32)
         res["cloth_points"] = Pk.astype(np.float32)
         res["cloth_valid"] = (ticks < a.cloth_valid_until) & (ticks >= ct[0]) & np.isfinite(Pk).all((0, 2))
+        # the cloth lies on the table at the first tick: those points are cloth, not static scene
+        from scipy.spatial import cKDTree
+        k0 = int(np.argmax(np.isfinite(Pk).all((0, 2))))
+        dd, _ = cKDTree(Pk[:, k0]).query(res["static_points"], distance_upper_bound=0.015)
+        keep = ~np.isfinite(dd)
+        res["static_points"], res["static_color"] = res["static_points"][keep], res["static_color"][keep]
     os.makedirs(os.path.dirname(out_p), exist_ok=True)
     np.savez_compressed(out_p, **res)
     qa = {"episode": f"{ep.task}/{ep.name}", "ticks": int(len(ticks)), "seconds": round(time.time() - t0, 1),
-          "n_robot": int(len(arms.local)), "n_static": int(len(conv.static[0])),
+          "n_robot": int(len(arms.local)), "n_static": int(len(res["static_points"])),
           "n_object": int(sum(len(o.samples) for o in conv.objs)), "n_cloth": int(res["cloth_points"].shape[0]) if "cloth_points" in res else 0,
           "objects": {n: {"init": conv.init_info.get(n), "res_med_mm": float(np.nanmedian(obj_res[i, :, 0]) * 1000) if np.isfinite(obj_res[i, :, 0]).any() else None,
                           "res_p90_mm": float(np.nanpercentile(obj_res[i, :, 0], 90) * 1000) if np.isfinite(obj_res[i, :, 0]).any() else None,
