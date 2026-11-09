@@ -1,0 +1,353 @@
+{
+ "rig": "bimanual YAM, top + side RealSense",
+ "created": "2026-11-08T21:55:10",
+ "method": "FK mesh silhouette -> photo Canny edges, robust LM over the camera pose (realpc/cam_calib.py)",
+ "world": "left arm base",
+ "T_lb_rb": [
+  [
+   0.9986951282677093,
+   -0.04939368707872279,
+   0.012973220537385423,
+   0.05309288348196829
+  ],
+  [
+   0.04896974450814754,
+   0.9983133936403863,
+   0.03118224175746619,
+   -0.5577301839775156
+  ],
+  [
+   -0.014491545712903954,
+   -0.030506257636483836,
+   0.9994295189496186,
+   0.01841264878635085
+  ],
+  [
+   0.0,
+   0.0,
+   0.0,
+   1.0
+  ]
+ ],
+ "cameras": {
+  "top": {
+   "T_world_cam": [
+    [
+     0.0894477748784157,
+     -0.7373764117086878,
+     0.6695335115025383,
+     0.07944247653264067
+    ],
+    [
+     -0.9935179444365742,
+     -0.11340506096984948,
+     0.007834936435525304,
+     -0.22789410936994484
+    ],
+    [
+     0.07015119137850948,
+     -0.6658943757098749,
+     -0.7427405272005368,
+     0.557236343654002
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "T_world_cam_recorder": [
+    [
+     0.05055730199568301,
+     -0.6535977910005649,
+     0.7551515654582851,
+     0.08055577799612863
+    ],
+    [
+     -0.9977987026094853,
+     -0.06554636685558689,
+     0.010070891860217368,
+     -0.23082363253322527
+    ],
+    [
+     0.04291512886785587,
+     -0.7539984094089417,
+     -0.6554728753526272,
+     0.5072198293912754
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "recorder_pose_max_diff_between_episodes": 0.0,
+   "correction_rot_deg": 7.50820066311409,
+   "correction_trans_mm": 50.11460111690339,
+   "heldout_outline_edge_px_before": {
+    "left": {
+     "median_px": 30.0,
+     "p90_px": 30.0,
+     "n_frames": 12
+    },
+    "right": {
+     "median_px": 19.386048316955566,
+     "p90_px": 30.0,
+     "n_frames": 10
+    }
+   },
+   "heldout_outline_edge_px_after": {
+    "left": {
+     "median_px": 30.0,
+     "p90_px": 30.0,
+     "n_frames": 12
+    },
+    "right": {
+     "median_px": 16.786046981811523,
+     "p90_px": 30.0,
+     "n_frames": 10
+    }
+   },
+   "fit_log": [
+    {
+     "round": 0,
+     "n_contour_pts": 26485,
+     "median_px_before": 20.0,
+     "median_px_after": 20.0,
+     "rot_deg": 7.8300901157867,
+     "trans_mm": 41.69828095536098
+    },
+    {
+     "round": 1,
+     "n_contour_pts": 27568,
+     "median_px_before": 20.0,
+     "median_px_after": 20.0,
+     "rot_deg": 7.388318640475358,
+     "trans_mm": 44.78153028099884
+    },
+    {
+     "round": 2,
+     "n_contour_pts": 29634,
+     "median_px_before": 20.0,
+     "median_px_after": 20.0,
+     "rot_deg": 7.222895477659938,
+     "trans_mm": 49.86283875724134
+    },
+    {
+     "round": 3,
+     "n_contour_pts": 29699,
+     "median_px_before": 20.0,
+     "median_px_after": 20.0,
+     "rot_deg": 7.508200663114122,
+     "trans_mm": 50.1146011169034
+    }
+   ],
+   "frames": [
+    "hang/episode_0000:24",
+    "hang/episode_0000:60",
+    "hang/episode_0000:96 (held-out)",
+    "hang/episode_0000:132",
+    "hang/episode_0000:168",
+    "hang/episode_0000:204 (held-out)",
+    "hang/episode_0000:240",
+    "hang/episode_0000:277",
+    "hang/episode_0000:313 (held-out)",
+    "hang/episode_0000:349",
+    "hang/episode_0000:385",
+    "hang/episode_0000:421 (held-out)",
+    "hang/episode_0000:457",
+    "hang/episode_0000:494",
+    "greycloth/episode_0000:22",
+    "greycloth/episode_0000:54",
+    "greycloth/episode_0000:87 (held-out)",
+    "greycloth/episode_0000:120",
+    "greycloth/episode_0000:153",
+    "greycloth/episode_0000:185 (held-out)",
+    "greycloth/episode_0000:218",
+    "greycloth/episode_0000:251",
+    "greycloth/episode_0000:284 (held-out)",
+    "greycloth/episode_0000:316",
+    "greycloth/episode_0000:349",
+    "greycloth/episode_0000:382 (held-out)",
+    "greycloth/episode_0000:415",
+    "greycloth/episode_0000:448",
+    "sweep/episode_0000:42",
+    "sweep/episode_0000:103",
+    "sweep/episode_0000:165 (held-out)",
+    "sweep/episode_0000:227",
+    "sweep/episode_0000:288",
+    "sweep/episode_0000:350 (held-out)",
+    "sweep/episode_0000:412",
+    "sweep/episode_0000:473",
+    "sweep/episode_0000:535 (held-out)",
+    "sweep/episode_0000:597",
+    "sweep/episode_0000:658",
+    "sweep/episode_0000:720 (held-out)",
+    "sweep/episode_0000:782",
+    "sweep/episode_0000:844"
+   ]
+  },
+  "side": {
+   "T_world_cam": [
+    [
+     0.5379261239303905,
+     0.4042298946057415,
+     -0.7397524433891761,
+     1.0363435603749427
+    ],
+    [
+     0.8383861148002173,
+     -0.16492909649602308,
+     0.5195258565646205,
+     -0.7417233598763789
+    ],
+    [
+     0.08800118012517175,
+     -0.8996647072304421,
+     -0.4276204004260563,
+     0.4150203571377584
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "T_world_cam_recorder": [
+    [
+     0.6213835755660263,
+     0.3772498928829704,
+     -0.6867058834294103,
+     0.8561317325795779
+    ],
+    [
+     0.7762865292180815,
+     -0.17772250095384803,
+     0.6048090088691258,
+     -0.7250997281268579
+    ],
+    [
+     0.1061210467877367,
+     -0.9088989113066961,
+     -0.403287853095253,
+     0.3355232501868109
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "recorder_pose_max_diff_between_episodes": 0.0,
+   "correction_rot_deg": 6.121220455443483,
+   "correction_trans_mm": 197.66749359330754,
+   "heldout_outline_edge_px_before": {
+    "left": {
+     "median_px": 4.59844970703125,
+     "p90_px": 7.431629705429078,
+     "n_frames": 12
+    },
+    "right": {
+     "median_px": 8.5,
+     "p90_px": 11.885968685150146,
+     "n_frames": 12
+    }
+   },
+   "heldout_outline_edge_px_after": {
+    "left": {
+     "median_px": 5.096899747848511,
+     "p90_px": 7.9393799781799315,
+     "n_frames": 12
+    },
+    "right": {
+     "median_px": 5.799999952316284,
+     "p90_px": 8.53070011138916,
+     "n_frames": 12
+    }
+   },
+   "fit_log": [
+    {
+     "round": 0,
+     "n_contour_pts": 19773,
+     "median_px_before": 6.000000000000014,
+     "median_px_after": 4.292706696313724,
+     "rot_deg": 4.99463699665779,
+     "trans_mm": 92.0121421843667
+    },
+    {
+     "round": 1,
+     "n_contour_pts": 22215,
+     "median_px_before": 4.996899604797414,
+     "median_px_after": 4.356268893011176,
+     "rot_deg": 6.009075393945689,
+     "trans_mm": 159.71255039296383
+    },
+    {
+     "round": 2,
+     "n_contour_pts": 23877,
+     "median_px_before": 4.9968996047973295,
+     "median_px_after": 4.355905450805567,
+     "rot_deg": 6.114037275047169,
+     "trans_mm": 196.74745030789424
+    },
+    {
+     "round": 3,
+     "n_contour_pts": 24005,
+     "median_px_before": 4.199999809265205,
+     "median_px_after": 4.450706191309877,
+     "rot_deg": 6.1212204554434315,
+     "trans_mm": 197.66749359330765
+    }
+   ],
+   "frames": [
+    "hang/episode_0000:24",
+    "hang/episode_0000:60",
+    "hang/episode_0000:96 (held-out)",
+    "hang/episode_0000:132",
+    "hang/episode_0000:168",
+    "hang/episode_0000:204 (held-out)",
+    "hang/episode_0000:240",
+    "hang/episode_0000:277",
+    "hang/episode_0000:313 (held-out)",
+    "hang/episode_0000:349",
+    "hang/episode_0000:385",
+    "hang/episode_0000:421 (held-out)",
+    "hang/episode_0000:457",
+    "hang/episode_0000:494",
+    "greycloth/episode_0000:22",
+    "greycloth/episode_0000:54",
+    "greycloth/episode_0000:87 (held-out)",
+    "greycloth/episode_0000:120",
+    "greycloth/episode_0000:153",
+    "greycloth/episode_0000:185 (held-out)",
+    "greycloth/episode_0000:218",
+    "greycloth/episode_0000:251",
+    "greycloth/episode_0000:284 (held-out)",
+    "greycloth/episode_0000:316",
+    "greycloth/episode_0000:349",
+    "greycloth/episode_0000:382 (held-out)",
+    "greycloth/episode_0000:415",
+    "greycloth/episode_0000:448",
+    "sweep/episode_0000:42",
+    "sweep/episode_0000:103",
+    "sweep/episode_0000:165 (held-out)",
+    "sweep/episode_0000:227",
+    "sweep/episode_0000:288",
+    "sweep/episode_0000:350 (held-out)",
+    "sweep/episode_0000:412",
+    "sweep/episode_0000:473",
+    "sweep/episode_0000:535 (held-out)",
+    "sweep/episode_0000:597",
+    "sweep/episode_0000:658",
+    "sweep/episode_0000:720 (held-out)",
+    "sweep/episode_0000:782",
+    "sweep/episode_0000:844"
+   ]
+  }
+ },
+ "status": "EVALUATED, NOT ADOPTED: held-out gains small/mixed and the solve moves the cameras 6-7.5 deg; the pipeline uses the recorder calibration (calib.json / low_dim cam_pose_*)"
+}

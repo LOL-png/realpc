@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.npz
+*.npy
+*.mp4
+*.pt
+out/
+cache/
+.model_cache/
+.cache/

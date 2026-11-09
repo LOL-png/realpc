@@ -1,0 +1,10 @@
+# core (tested versions)
+numpy==1.26.4
+scipy==1.15.3
+trimesh==4.6.13
+opencv-python==4.11.0.86
+scikit-image==0.25.2
+matplotlib==3.10.3
+torch==2.7.1            # depth refinement, CoTracker3 (weights fetched once via torch.hub into .model_cache/)
+# external tool: ffmpeg (>= 4.4) on PATH
+# optional: the plwm SE(3)-patch AE for scripts/evaluate.py / roundtrip_video.py (installed `plwm`, or PLWM_SE3_SRC)

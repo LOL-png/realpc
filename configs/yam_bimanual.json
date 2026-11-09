@@ -1,0 +1,18 @@
+{
+  "_doc": "Rig config: bimanual I2RT YAM (6-DoF + parallel gripper). Paths are relative to this file. The arm calibration (right base pose, cameras) and the table plane are read per episode from calib.json unless overridden here.",
+  "robot": {
+    "urdf": "../robot_models/yam_v1/yam.urdf",
+    "arm_joints": ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"],
+    "finger_joints": {"joint7": [0.0, -0.04695], "joint8": [0.0, -0.04695]},
+    "_finger_doc": "finger joint = closed + g * (open - closed), g = recorded normalised gripper (1 = open); matches the recorder's own FK to 0.001 mm",
+    "points_per_link": {"base": 400, "link1": 400, "link2": 1000, "link3": 1000, "link4": 400, "link5": 300, "gripper": 700, "tip_left": 300, "tip_right": 300},
+    "arms": ["left", "right"],
+    "world_arm": "left"
+  },
+  "calibration": {
+    "T_world_right_base": null,
+    "table_plane": null,
+    "_doc": "null = take calib.json T_lb_rb / table_n, table_d from the episode"
+  },
+  "tracker": {}
+}
