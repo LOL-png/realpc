@@ -1,5 +1,36 @@
 # realpc: time-consistent 4D point clouds from bimanual RGB-D recordings
 
+## v4 (current, 11-09): calibrated robot + object mesh library + causal 6-DoF mesh pose tracking
+
+One causal code path (`realpc/v4.py` `StreamConverter.step(t, frames)`) serves training-data conversion and live
+inference; it can start at any tick (cold start: objects are registered into the first cloud it sees).
+
+| part | how |
+|---|---|
+| calibration | `configs/calib_yam_rig_v3.json` (`realpc/calib_rig.py` RigCalib): rigid camera rig, one base correction per arm, joint zero offsets, constant camera lag (+3 ticks). Fitted by `scripts/calib_v3.py --rig --const_lag 3 --offsets` (track bundle adjustment through the FK + depth + pytorch3d soft silhouettes, `realpc/handeye_ba.py`, `realpc/diffcalib.py`) |
+| robot | FK of the recorded joints (+offsets): 9600 fixed link-surface samples |
+| objects | library meshes `assets/objects/<task>/<name>.ply` (`scripts/build_object_lib.py`, `scripts/refine_object_lib.py`): one 6-DoF pose per tick, 1500 fixed samples each |
+| object masks | `scripts/segment_objects.py`: SAM2 video propagation forward only, seeded with renders of the library + FK arms at the first tick |
+| pose tracking | `realpc/meshtrack.py`: held = FK gripper x grasp offset; carried objects attach to their carrier; mask-gated point-to-plane ICP on top+side depth; lost objects re-localised from their mask |
+| static scene | table-region points of the first tick (robot, objects, cloth removed) |
+| cloth | greycloth: cloth v1 tracks mapped into the v3 frame, valid before the fold only |
+
+```bash
+export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6      # open3d with the conda env's old libstdc++
+python scripts/segment_objects.py --episode <ep> --out_dir <seg>                 # causal object masks
+python scripts/convert_v4.py --episodes <ep> ... --out_dir <out> --seg_dir <seg> [--start S --cold]
+python scripts/verify_v4.py --converted <out>/<task>/<ep>.npz --episode <ep> --out v.mp4
+python scripts/eval_alignment.py --converted <npz> --episode <ep> --masks <SAM2 dir> --out a.json   # acceptance
+python scripts/make_manifest.py --out_dir <out>
+python -c "from realpc.dataset import load; d = load('<npz>'); print(d['points'].shape)"   # [T, N, 3]
+```
+
+Requirements added for v4: pytorch3d 0.7.8 (prebuilt wheel), open3d 0.20, SAM2 (weights in `.model_cache/sam2/`),
+fast_simplification, rtree, scikit-image.
+
+---
+
+
 `realpc` turns a recorded robot episode into tracked points: every point keeps its identity over time. The inputs are
 RGB-D videos of the top and side cameras, the recorder's fused cloud, and joint angles.
 
