@@ -13,6 +13,7 @@ Per tick t (only frames <= t are used):
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 
 import cv2
@@ -83,6 +84,9 @@ class ObjState:
     lost: int = 0
     relocs: int = 0
     carrier: str | None = None
+    support: dict = field(default_factory=dict)
+    sil_iou: tuple = (np.nan, np.nan)
+    mode: str = ""
     T_car_obj: np.ndarray | None = None
 
 
@@ -135,7 +139,8 @@ class MeshTracker:
         self.objs = {o.name: o for o in objects}
         self.state = {o.name: ObjState(np.asarray(init_poses[o.name], float)) for o in objects}
         self.arm = arm_model
-        self.cfg = dict(contact=0.03, grasp_tip=0.02, grip_close=0.15, release_open=0.15, icp_iters=6, huber=0.005, held_max_corr=0.01, held_blend=0.1, held_blend_mask=0.3, mask_min_pts=60, mask_move_gate=0.002,
+        self.cfg = dict(contact=0.03, grasp_tip=0.02, grip_close=0.15, release_open=0.15, icp_iters=6, huber=0.005, held_max_corr=0.01, held_blend=0.1, held_blend_mask=0.3, mask_min_pts=60, mask_move_gate=0.002, cam_min_pts=40, sil_refine=os.environ.get("REALPC_SIL", "0") == "1", sil_steps=8, sil_lr=2e-3,
+                        sil_min_px=40, sil_min_gain=0.01, cam_equal_weight=os.environ.get("REALPC_CAM_EQUAL", "0") == "1",
                         max_corr=0.03, free_tol=0.015, min_inl=40, move_gate=0.003, flow=True)
         self.cfg.update(cfg or {})
         self.prev = None                            # previous tick's views (for flow / track Kabsch)
@@ -231,11 +236,22 @@ class MeshTracker:
                     st.T = car.T @ st.T_car_obj
             # ---- mask-backed update (object masks from the causal segmenter): the main path
             lid = list(self.objs).index(name) + 1
-            M = np.concatenate([v.masked_points(lid) for v in views]) if any(v.labels is not None for v in views) else np.zeros((0, 3))
+            # joint multi-camera measurement: each camera with enough visible support gets EQUAL total weight (an occluded
+            # camera drops out; the other camera(s) carry the pose); none -> held FK / carrier / previous pose
+            Ms = [v.masked_points(lid) for v in views] if any(v.labels is not None for v in views) else []
+            sup = {v.name: len(m_) for v, m_ in zip(views, Ms)}
+            use_v = [m_ for m_ in Ms if len(m_) >= self.cfg["cam_min_pts"]]
+            M = np.concatenate(use_v) if use_v else np.zeros((0, 3))
+            Mw = np.concatenate([np.full(len(m_), 1.0 / len(m_)) for m_ in use_v]) * len(M) / max(1, len(use_v)) if use_v else np.zeros(0)
+            if not self.cfg["cam_equal_weight"]:
+                Mw = np.ones(len(M))
+            st.support = sup
+            st.mode = ("+".join(v.name for v, m_ in zip(views, Ms) if len(m_) >= self.cfg["cam_min_pts"]) or
+                       ("fk" if st.held is not None else ("carrier" if st.carrier is not None else "hold")))
             if len(M) >= self.cfg["mask_min_pts"]:
                 if st.held is not None:
                     G = rob[st.held]["G"]
-                    T1, res = self.icp_masked(o, st.T, M)
+                    T1, res = self.icp_masked(o, st.T, M, w=Mw)
                     dT = T1 @ np.linalg.inv(st.T)
                     dang = np.degrees(np.arccos(np.clip((np.trace(dT[:3, :3]) - 1) / 2, -1, 1)))
                     if res[1] >= self.cfg["mask_min_pts"] and np.linalg.norm(dT[:3, 3]) < 0.03 and dang < 10:
@@ -258,7 +274,7 @@ class MeshTracker:
                             cands.append(Tk @ st.T)
                     best = None
                     for T0 in cands:
-                        T1, res = self.icp_masked(o, T0, M)
+                        T1, res = self.icp_masked(o, T0, M, w=Mw)
                         if res[1] >= self.cfg["mask_min_pts"] and (best is None or res[0] < best[1][0]):
                             best = (T1, res)
                     if best is None:                                  # mask present, pose far off: re-localize
@@ -282,6 +298,17 @@ class MeshTracker:
                             if st.carrier is not None:
                                 st.T_car_obj = np.linalg.inv(self.state[st.carrier].T) @ st.T
                         st.last_res = res
+                # per-tick silhouette refinement against the masks of every camera that sees the object
+                if self.cfg["sil_refine"]:
+                    Tn, ib, ia = self.sil_refine(o, st.T, views, robot_z, lid)
+                    if Tn is not None and ia > ib + self.cfg["sil_min_gain"]:
+                        if st.held is not None:
+                            G = rob[st.held]["G"]
+                            st.T_grip_obj = np.linalg.inv(G) @ Tn
+                        elif st.carrier is not None:
+                            st.T_car_obj = np.linalg.inv(self.state[st.carrier].T) @ Tn
+                        st.T = Tn
+                    st.sil_iou = (ib, ia)
                 moved[name] = st.T @ np.linalg.inv(prevT[name])
                 out[name] = st.T.copy()
                 st.history.append(st.T.copy())
@@ -408,7 +435,52 @@ class MeshTracker:
                 break
         return T, res
 
-    def icp_masked(self, o, T, M, iters=10):
+    def sil_refine(self, o, T, views, robot_z, lid):
+        """a few Adam steps on a 6-DoF correction (object frame) maximising the support-weighted soft-silhouette IoU
+        with the object's mask in every camera (robot pixels and other objects ignored), prior to the current pose."""
+        from .diffcalib import se3_exp, soft_iou
+        data = []
+        for vi, v in enumerate(views):
+            if v.labels is None:
+                continue
+            h, w = v.R.H, v.R.W
+            lab = cv2.resize(v.labels, (w, h), interpolation=cv2.INTER_NEAREST)
+            m = lab == lid
+            if m.sum() < self.cfg["sil_min_px"]:
+                continue
+            rz = robot_z[vi]
+            ign = ((lab > 0) & (lab != lid)) | (np.isfinite(rz) & (rz < 1e8) & ~m)
+            Tcw = torch.tensor(v.Tcw, dtype=torch.float32, device="cuda")
+            data.append((v, torch.tensor(m, dtype=torch.float32, device="cuda")[None],
+                         torch.tensor(~ign, dtype=torch.float32, device="cuda")[None], Tcw, min(1.0, m.sum() / 300.0)))
+        if not data:
+            return None, 0.0, 0.0
+        T0 = torch.tensor(T, dtype=torch.float32, device="cuda")
+        d = torch.zeros(6, device="cuda", requires_grad=True)
+        opt = torch.optim.Adam([d], lr=self.cfg["sil_lr"])
+        V = o.verts_t
+
+        def loss_iou(dd, sigma):
+            Tn = T0 @ se3_exp(dd)
+            Vw = V @ Tn[:3, :3].T + Tn[:3, 3]
+            tot, wsum, ious = 0.0, 0.0, []
+            for v, m, val, Tcw, wc in data:
+                sil, _ = v.R.raster((Vw @ Tcw[:3, :3].T + Tcw[:3, 3])[None], o.faces_t, sigma=sigma, fpp=6 if sigma else 1)
+                iou = soft_iou(sil, m, val)[0]
+                tot = tot + wc * (1 - iou); wsum += wc; ious.append(float(iou))
+            return tot / wsum, float(np.average(ious, weights=[x[4] for x in data]))
+        with torch.no_grad():
+            _, i0 = loss_iou(d, None)
+        for _ in range(self.cfg["sil_steps"]):
+            l, _ = loss_iou(d, 2e-4)
+            l = l + 0.05 * ((d[3:] / 0.01) ** 2).sum() + 0.05 * ((d[:3] / 0.05) ** 2).sum()
+            opt.zero_grad(); l.backward(); opt.step()
+        with torch.no_grad():
+            _, i1 = loss_iou(d, None)
+            Tn = (T0 @ se3_exp(d)).cpu().numpy().astype(float)
+        return Tn, i0, i1
+
+    def icp_masked(self, o, T, M, iters=10, w=None):
         """data -> model point-to-plane ICP of the object's masked depth points M (world) onto the mesh (object frame
         KD-tree), Huber; right-multiplied update in the object frame. -> T, (median |r|, n)"""
         T = T.copy()
@@ -422,11 +494,12 @@ class MeshTracker:
             if ok.sum() < 20:
                 return T, (np.nan, int(ok.sum()))
             p, n, x = o.icp_pts[j[ok]], o.icp_nrm[j[ok]], Mo[ok]
+            wc = np.ones(ok.sum()) if w is None else w[ok]
             r = ((x - p) * n).sum(1)
             # model point p moves by dT: p' = p + w x p + v  -> residual r - n.(w x p + v)
             J = np.c_[np.cross(p, n), n]
             hub = self.cfg["huber"]
-            wt = np.where(np.abs(r) < hub, 1.0, hub / np.maximum(np.abs(r), 1e-9))
+            wt = np.where(np.abs(r) < hub, 1.0, hub / np.maximum(np.abs(r), 1e-9)) * wc
             H = (J * wt[:, None]).T @ J + 1e-5 * np.eye(6)
             xi = np.linalg.solve(H, (J * wt[:, None]).T @ r)
             T = T @ se3_small(xi)

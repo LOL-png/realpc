@@ -145,6 +145,8 @@ class StreamConverter:
             out["obj_res"][o.name] = st.last_res
             out["obj_held"][o.name] = 0 if st.held is None else (1 if st.held == "left" else 2)
             out.setdefault("obj_relocs", {})[o.name] = st.relocs
+            out.setdefault("obj_support", {})[o.name] = (st.support.get("top", 0), st.support.get("side", 0))
+            out.setdefault("obj_mode", {})[o.name] = st.mode
             if st.carrier is not None and st.held is None:
                 out["obj_held"][o.name] = 3                       # carried by another (held) object
         return out
