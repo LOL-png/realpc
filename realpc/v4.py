@@ -88,7 +88,15 @@ class StreamConverter:
                         T0 = np.asarray(sc["T_world_obj_t0"], float)
             if T0 is None:
                 pts = np.load(os.path.join(self.lib_dir, f"{o.name}_points.npz"))
-                T0, fit, rmse = objlib.register(pts["P"].astype(float), pts["C"].astype(float), P, C, voxel=0.005)
+                Pl, Cl = pts["P"].astype(float), pts["C"].astype(float)
+                # colour-gated candidates off the table plane (an object may already be held in the air)
+                n_, d_ = self.ep.table_plane()
+                pr = objlib.colour_model(Cl, C[::40])(C)
+                cand = (pr > 0.3) & ((P @ n_ + d_) > 0.008)
+                if cand.sum() < 60:
+                    cand = pr > 0.2
+                T0, fit, rmse = objlib.register(Pl, Cl, P[cand], C[cand], voxel=0.005)
+                T0, fit, rmse = objlib.register(Pl, Cl, P[pr > 0.15], C[pr > 0.15], voxel=0.004, init=T0)
                 self.init_info[o.name] = {"cold_registration_fitness": fit, "rmse_mm": rmse * 1000}
             else:
                 self.init_info[o.name] = {"library_scan_pose": True}

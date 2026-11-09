@@ -26,9 +26,10 @@ from realpc.io import Episode  # noqa: E402
 from realpc.v4 import load_library  # noqa: E402
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--converted", required=True); ap.add_argument("--episode", required=True); ap.add_argument("--masks", required=True)
+ap.add_argument("--converted", required=True); ap.add_argument("--episode", required=True); ap.add_argument("--masks", default=None)
 ap.add_argument("--out", required=True); ap.add_argument("--every", type=int, default=2); ap.add_argument("--thr", type=float, default=0.5)
 ap.add_argument("--min_px", type=int, default=60)
+ap.add_argument("--seg_dir", default=None, help="use our own SAM2 masks (segment_objects.py) instead of --masks: self-consistency QA")
 ap.add_argument("--calib", default=os.path.join(ROOT, "configs", "calib_yam_rig_v3.json"))
 ap.add_argument("--assets", default=os.path.join(ROOT, "assets", "objects"))
 a = ap.parse_args()
@@ -42,9 +43,15 @@ ticks = d["ticks"]
 res = {}
 per_frame = {}
 for c in ("top", "side"):
-    z = np.load(os.path.join(a.masks, f"{c}_masks.npz")); M = z["masks"]; ln = [str(x) for x in z["label_names"]]
+    if a.seg_dir:
+        z = np.load(os.path.join(a.seg_dir, ep.task, f"{ep.name}_{c}.npz"))
+        M = z["labels"]; ln = ["background"] + [str(x) for x in z["names"]]
+        ln = ln + [f"pad{i}" for i in range(len(ln), 254)] + ["robot_left", "robot_right"]
+    else:
+        z = np.load(os.path.join(a.masks, f"{c}_masks.npz")); M = z["masks"]; ln = [str(x) for x in z["label_names"]]
     H, W = M.shape[1:]; s = 320 / W; h = int(round(H * s))
-    K = ep.intrinsics(c).copy(); K[:2] *= s
+    W_native = 1280 if c == "top" else 640
+    K = ep.intrinsics(c).copy(); K[:2] *= 320 / W_native
     R = Renderer(K, h, 320)
     Tcw = torch.tensor(np.linalg.inv(cal.T_world_cam(c)), dtype=torch.float32, device="cuda")
     robot_ids = [i for i, x in enumerate(ln) if x.startswith("robot")]
