@@ -29,6 +29,8 @@ ap.add_argument("--data", default=os.path.expanduser("~/data_ext/agentwm_probe/h
 ap.add_argument("--holdout", nargs="*", default=[]); ap.add_argument("--iters", type=int, default=1500)
 ap.add_argument("--offsets", action="store_true"); ap.add_argument("--rounds", type=int, default=3)
 ap.add_argument("--life", type=int, default=80)
+ap.add_argument("--rig", action="store_true", help="rigid camera rig (recorder top<->side kept), one correction per arm")
+ap.add_argument("--const_lag", type=float, default=None, help="one constant lag (ticks) for every camera: no lag search / fit")
 ap.add_argument("--masks_root", default=os.path.expanduser("~/data_ext/masks"))
 ap.add_argument("--sil_w", type=float, default=2.0); ap.add_argument("--sil_every", type=int, default=4)
 ap.add_argument("--depth_w", type=float, default=0.3); ap.add_argument("--depth_sigma", type=float, default=0.01)
@@ -51,7 +53,7 @@ for c in ("top", "side"):
     Ti = np.linalg.inv(np.asarray(ep0.low[f"cam_pose_{c}"][0]))
     T0[(c, "left")] = Ti
     T0[(c, "right")] = Ti @ np.asarray(ep0.calib["T_lb_rb"])
-ba = HandEyeBA(arm, T0)
+ba = HandEyeBA(arm, T0, rig=a.rig)
 nl = len(arm.links)
 print("sequences:", [(s.key, s.cam, len(s.starts)) for s in seqs], flush=True)
 
@@ -87,6 +89,16 @@ def scan_and_associate(max_rms, lag_center=None, half=None):
     import time as _t
     t0 = _t.time()
     assoc, lagseg = {}, {}
+    if a.const_lag is not None:
+        for s in seqs:
+            for j in range(len(s.starts)):
+                res = ba.associate(s, j, float(a.const_lag))
+                res["lag"] = float(a.const_lag)
+                res["ok"] = gated(s, j, res, max_rms)
+                assoc[(s.key, s.cam, j)] = res
+                lagseg[(s.key, s.cam, j)] = (np.array([a.const_lag]), np.array([0.0]))
+        print(f"  associated at constant lag {a.const_lag} ({_t.time() - t0:.0f} s)", flush=True)
+        return assoc, lagseg
     for s in seqs:
         for j in range(len(s.starts)):
             if lag_center is None:
@@ -271,7 +283,8 @@ for rd in range(a.rounds):
     obs = make_obs(assoc, is_fit)
     print(f"round {rd}: {len(obs)} fit tracks, {sum(len(o['k']) for o in obs)} observations", flush=True)
     X, knots, hist = ba.refine(seqs, obs, knots, iters=a.iters, fit_offsets=(a.offsets and rd == a.rounds - 1),
-                               depth_w=a.depth_w, depth_sigma=a.depth_sigma, extra_loss=extra)
+                               depth_w=a.depth_w, depth_sigma=a.depth_sigma, extra_loss=extra,
+                               fit_lag=a.const_lag is None)
     knots_ref.update(knots)
     print("corrections:", json.dumps(corrections()), flush=True)
     lag_c = {(s.key, s.cam, j): float(np.interp(s.starts[j] + a.life / 2, *knots[(s.key, s.cam)])) for s in seqs for j in range(len(s.starts))}
@@ -298,7 +311,7 @@ out = {"version": "v3-tracks", "created": datetime.datetime.now().isoformat(time
        "T_lb_top": T_lb_cam["top"].tolist(), "T_lb_side": T_lb_cam["side"].tolist(),
        "T_lb_rb_from_top": T_lb_rb_per_cam["top"].tolist(), "T_lb_rb_from_side": T_lb_rb_per_cam["side"].tolist(),
        "joint_offsets_rad": {k: v.detach().cpu().numpy().tolist() for k, v in ba.joff.items()},
-       "lags": lags_out, "lag_scan_recorder_calib": lag_curves, "holdout_episodes": a.holdout,
+       "const_lag": a.const_lag, "lags": lags_out, "lag_scan_recorder_calib": lag_curves, "holdout_episodes": a.holdout,
        "recorder": {"T_lb_top": np.linalg.inv(T0[("top", "left")]).tolist(), "T_lb_side": np.linalg.inv(T0[("side", "left")]).tolist(),
                     "T_lb_rb": np.asarray(ep0.calib["T_lb_rb"]).tolist()}}
 json.dump(out, open(a.out, "w"), indent=1)

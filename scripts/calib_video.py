@@ -67,7 +67,7 @@ def render(cal, c, t):
     for arm_ in ("left", "right"):
         tq = cal.robot_tick(ep, c, t)
         q = cal.q_at(ep, arm_, tq)
-        V = arm.verts(torch.tensor(q[None], dtype=torch.float32, device="cuda"), cal.joint_offsets(arm_))
+        V = arm.verts(torch.tensor(q[None], dtype=torch.float32, device="cuda"))   # q_at applies the joint offsets
         M = torch.tensor(cal.T_cam_base(c, arm_), dtype=torch.float32, device="cuda")
         Vc = V @ M[:3, :3].T + M[:3, 3]
         sil, z = R.raster(Vc, arm.faces)

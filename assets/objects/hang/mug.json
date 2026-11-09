@@ -1,0 +1,91 @@
+{
+ "task": "hang",
+ "name": "mug",
+ "created": "2026-11-09T01:58:18",
+ "watertight": true,
+ "volume_m3": 0.0005549056671038411,
+ "extents_m": [
+  0.15739240889269068,
+  0.11628385702467756,
+  0.16647794202250824
+ ],
+ "n_vertices": 18614,
+ "n_faces": 37264,
+ "fused_points": 3538,
+ "frame": "object frame = mesh centroid, axes parallel to the world (left arm base) frame of the reference episode at its first tick",
+ "T_world_obj_ref": [
+  [
+   1.0,
+   0.0,
+   0.0,
+   0.5170155545306531
+  ],
+  [
+   0.0,
+   1.0,
+   0.0,
+   -0.24509270282214765
+  ],
+  [
+   0.0,
+   0.0,
+   1.0,
+   0.2392105883422003
+  ],
+  [
+   0.0,
+   0.0,
+   0.0,
+   1.0
+  ]
+ ],
+ "reference_episode": "hang/episode_0000",
+ "calibration": "configs/calib_yam_rig_v3.json",
+ "shape": "space carving (top+side depth of the static ticks of every registered episode; table plane as floor), largest component containing the observed points; unseen regions stay filled (conservative)",
+ "observed_surface_frac": 0.38524766304931773,
+ "n_views": 6,
+ "scans": [
+  {
+   "kind": "ref",
+   "episode": "hang/episode_0000",
+   "fitness": 1.0,
+   "rmse_mm": 0.0,
+   "points": 3815,
+   "surf_res_med_mm": 3.916193127236584,
+   "surf_res_p90_mm": 7.30992792328152,
+   "T_world_obj_t0": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.5170155545306531
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     -0.24509270282214765
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.2392105883422003
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  }
+ ],
+ "n_scans": 1,
+ "surf_res_med_mm_all": 3.916193127236584,
+ "version": "v1 (bootstrap: tracked views in the object frame)",
+ "refine_views": 60,
+ "refine_tracks": [
+  "/home/howardji/data_ext/realpc_v4/trk/hang0_stand_static.npz"
+ ]
+}

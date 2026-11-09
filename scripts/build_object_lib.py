@@ -28,7 +28,7 @@ ap.add_argument("--task", required=True); ap.add_argument("--ref", required=True
 ap.add_argument("--calib", default=None); ap.add_argument("--masks_root", default=os.path.expanduser("~/data_ext/masks"))
 ap.add_argument("--data", default=os.path.expanduser("~/data_ext/agentwm_probe/hf")); ap.add_argument("--out", required=True)
 ap.add_argument("--objects", nargs="+", required=True); ap.add_argument("--n_static", type=int, default=3)
-ap.add_argument("--cams", nargs="+", default=["top", "side"]); ap.add_argument("--voxel", type=float, default=0.0025)
+ap.add_argument("--cams", nargs="+", default=["top", "side"]); ap.add_argument("--voxel", type=float, default=0.002)
 ap.add_argument("--debug_dir", default=None)
 a = ap.parse_args()
 
@@ -130,8 +130,8 @@ for e in a.episodes:
             continue
         Ti = np.linalg.inv(T)
         Pr = o["P"] @ T[:3, :3].T + T[:3, 3]
-        dd, _ = objlib.cKDTree(Pr).query(Pv, distance_upper_bound=0.006)
-        near = np.isfinite(dd) & (pr > 0.15)
+        dd, _ = objlib.cKDTree(Pr).query(Pv, distance_upper_bound=0.004)
+        near = np.isfinite(dd) & (pr > 0.4)
         Pc = Pv[near] @ Ti[:3, :3].T + Ti[:3, 3]
         o["parts"].append((Pc, Cv[near]))
         o["views"] += [(D_, K_, Ti @ T_) for D_, K_, T_ in V1]
@@ -149,7 +149,7 @@ for name, o in lib.items():
     P, C = P[ind], C[ind]
     lo = P.min(0) - 0.015; hi = P.max(0) + 0.015
     occ, lo, vx, seen = objlib.carve(o["views"], lo, hi, voxel=a.voxel, plane=(n_t, d_t))
-    occ = objlib.object_occupancy(occ, lo, vx, P, near=0.015)
+    occ = objlib.object_occupancy(occ, lo, vx, P, near=0.012)
     occ = objlib.footprint_fill(occ, lo, vx, P, (n_t, d_t))
     mesh = objlib.occupancy_mesh(occ, lo, vx, seed_pts=P)
     # how much of the final surface was actually observed (a fused point within 5 mm)
@@ -163,6 +163,11 @@ for name, o in lib.items():
     # vertex colours: nearest fused point
     _, j = objlib.cKDTree(Pobj).query(mesh.vertices)
     mesh.visual.vertex_colors = np.c_[(C[j] * 255).astype(np.uint8), np.full(len(j), 255, np.uint8)]
+    # surface-to-depth residual of every scan (scan points in the object frame -> mesh surface)
+    for si, (Pp, _) in enumerate(o["parts"]):
+        dres = objlib.surface_residual(mesh, Pp - ctr)
+        sc = list(o["scans"][si]); sc.append(float(np.median(dres))); sc.append(float(np.percentile(dres, 90)))
+        o["scans"][si] = tuple(sc)
     meta = {"task": a.task, "name": name, "created": datetime.datetime.now().isoformat(timespec="seconds"),
             "watertight": bool(mesh.is_watertight), "volume_m3": float(mesh.volume), "extents_m": mesh.extents.tolist(),
             "n_vertices": int(len(mesh.vertices)), "n_faces": int(len(mesh.faces)), "fused_points": int(len(P)),
@@ -171,8 +176,11 @@ for name, o in lib.items():
             "shape": "space carving (top+side depth of the static ticks of every registered episode; table plane as floor), largest component containing the observed points; unseen regions stay filled (conservative)",
             "observed_surface_frac": observed_frac, "n_views": len(o["views"]),
             "scans": [{"kind": k, "episode": e, "fitness": f, "rmse_mm": r * 1000, "points": n_,
-                       "T_world_obj_t0": (np.asarray(T) @ T_world_obj).tolist()} for k, e, T, n_, f, r in o["scans"]]}
+                       "surf_res_med_mm": rm * 1000, "surf_res_p90_mm": r9 * 1000,
+                       "T_world_obj_t0": (np.asarray(T) @ T_world_obj).tolist()} for k, e, T, n_, f, r, rm, r9 in o["scans"]],
+            "n_scans": len(o["scans"]),
+            "surf_res_med_mm_all": float(np.median([x[6] for x in o["scans"]]) * 1000)}
     objlib.save_object(mesh, meta, a.out, name)
     np.savez_compressed(os.path.join(a.out, f"{name}_points.npz"), P=Pobj.astype(np.float32), C=C.astype(np.float32))
     print(f"saved {name}: watertight {mesh.is_watertight}, {len(mesh.faces)} faces, extents {np.round(mesh.extents, 3)}, "
-          f"{len(o['scans'])} scans", flush=True)
+          f"{len(o['scans'])} scans, surface->depth residual median {meta['surf_res_med_mm_all']:.1f} mm", flush=True)

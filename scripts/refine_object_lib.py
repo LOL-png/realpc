@@ -30,7 +30,7 @@ ap.add_argument("--episodes", nargs="+", required=True); ap.add_argument("--cali
 ap.add_argument("--every", type=int, default=3); ap.add_argument("--max_res", type=float, default=0.008)
 ap.add_argument("--voxel", type=float, default=0.0025); ap.add_argument("--min_free", type=int, default=2)
 ap.add_argument("--free_frac", type=float, default=0.25); ap.add_argument("--out", required=True)
-ap.add_argument("--side_max_lag", type=float, default=2.5)
+ap.add_argument("--side_max_lag", type=float, default=2.5); ap.add_argument("--tick_max", type=int, default=None)
 a = ap.parse_args()
 cal = RigCalib.load(a.calib)
 mesh0 = trimesh.load(os.path.join(a.lib, f"{a.name}.ply"), process=False)
@@ -49,7 +49,8 @@ for ti, (trk, epp) in enumerate(zip(a.tracks, a.episodes)):
     pi = names.index(a.name)
     ticks = d["ticks"]; T_wo = d["obj_T"][pi]; res = d["obj_res"][pi]
     ep = Episode(epp)
-    use = [k for k in range(0, len(ticks), a.every) if np.isfinite(T_wo[k, 0, 0]) and np.isfinite(res[k, 0]) and res[k, 0] < a.max_res]
+    use = [k for k in range(0, len(ticks), a.every) if np.isfinite(T_wo[k, 0, 0]) and (np.isfinite(res[k, 0]) and res[k, 0] < a.max_res or a.tick_max is not None)
+           and (a.tick_max is None or ticks[k] < a.tick_max)]
     tk = [int(ticks[k]) for k in use]
     masks = {}
     if ti < len(a.masks) and a.masks[ti]:
@@ -79,7 +80,14 @@ for ti, (trk, epp) in enumerate(zip(a.tracks, a.episodes)):
                 lab = masks[c][0][t]; nm = masks[c][1]
                 bg = np.isin(lab, [nm.index(x) for x in ("background", "table") if x in nm])
                 fr |= inb & bg[np.clip(v, 0, H - 1), np.clip(u, 0, W - 1)] & ~(val & (dd < z - 0.01))
-            free += fr; seen += (val | fr); surf += val & (np.abs(dd - z) < 0.006)
+                # pixels of ANOTHER object at (or behind) the voxel's depth: the voxel is not this object
+                oth = np.isin(lab, [i for i, x in enumerate(nm) if x not in ("background", "table", a.name) and not x.startswith("robot")])
+                fr |= inb & oth[np.clip(v, 0, H - 1), np.clip(u, 0, W - 1)] & val & (dd > z - 0.01)
+            sv = val & (np.abs(dd - z) < 0.006)
+            if c in masks and t < len(masks[c][0]):
+                own = masks[c][0][t] == masks[c][1].index(a.name) if a.name in masks[c][1] else np.zeros_like(masks[c][0][t], bool)
+                sv &= own[np.clip(v, 0, H - 1), np.clip(u, 0, W - 1)]
+            free += fr; seen += (val | fr); surf += sv
             nviews += 1
             # observed surface points of the object in this view (for colours / coverage)
             if k % (a.every * 4) == 0:
@@ -90,11 +98,11 @@ for ti, (trk, epp) in enumerate(zip(a.tracks, a.episodes)):
                     pass
                 Psurf.append(P[np.isfinite(dm)]); Csurf.append(C[np.isfinite(dm)])
     print(f"{epp}: {len(use)} ticks with residual < {a.max_res*1000:.0f} mm", flush=True)
-occ0 = mesh0.contains(X) if mesh0.is_watertight else np.ones(len(X), bool)
+occ0 = mesh0.voxelized(a.voxel).fill().is_filled(X)
 remove = (free >= a.min_free) & (free >= a.free_frac * np.maximum(seen, 1))
 occ = (occ0 | (surf >= 3)) & ~remove
 occ = occ.reshape(shape)
-occ = objlib.object_occupancy(occ, lo, a.voxel, np.concatenate([pts["P"]] + [p for p in Psurf[1:]]), near=0.02)
+occ = objlib.object_occupancy(occ, lo, a.voxel, X[(surf >= 2)] if a.masks else np.concatenate([pts["P"]] + [p for p in Psurf[1:]]), near=0.02)
 P = np.concatenate(Psurf); C = np.concatenate(Csurf)
 mesh = objlib.occupancy_mesh(occ, lo, a.voxel, seed_pts=pts["P"])
 _, j = objlib.cKDTree(P).query(mesh.vertices)

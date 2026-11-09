@@ -62,6 +62,7 @@ class LibObject:
         self.samples = p.astype(np.float64); self.normals = self.mesh.face_normals[fi]
         q, fj = trimesh.sample.sample_surface_even(self.mesh, 6000, seed=1)
         self.icp_pts = np.asarray(q, float); self.icp_nrm = self.mesh.face_normals[np.asarray(fj)]
+        self.tree = cKDTree(self.icp_pts)
         m = self.mesh
         if len(m.faces) > 6000:
             import fast_simplification
@@ -79,19 +80,47 @@ class ObjState:
     grip_at_grasp: float = 1.0
     last_res: tuple = (np.nan, 0)
     history: list = field(default_factory=list)
+    lost: int = 0
+    relocs: int = 0
+    carrier: str | None = None
+    T_car_obj: np.ndarray | None = None
 
 
 class CamView:
     """one camera at one tick: depth (m), K, T_world_cam, grey image (for flow), low-res renderer."""
 
-    def __init__(self, name, D, K, Twc, grey=None, lowres=(180, 320)):
+    def __init__(self, name, D, K, Twc, grey=None, lowres=(180, 320), rgb=None, labels=None):
         self.name, self.D, self.K, self.Twc = name, D, np.asarray(K, float), np.asarray(Twc, float)
         self.Tcw = np.linalg.inv(self.Twc)
         self.grey = grey
+        self.rgb = rgb
+        self.labels = labels                     # object label image (any resolution): 0 none, i+1 = object i
         H, W = D.shape
         self.s = lowres[1] / W
         Kl = self.K.copy(); Kl[:2] *= self.s
         self.R = Renderer(Kl, int(round(H * self.s)), lowres[1])
+
+    def masked_points(self, lid, max_n=1500, stride=2):
+        """world points of the depth pixels whose label is `lid`."""
+        if self.labels is None:
+            return np.zeros((0, 3))
+        H, W = self.D.shape
+        lh, lw = self.labels.shape
+        vv, uu = np.mgrid[0:H:stride, 0:W:stride]
+        lab = self.labels[(vv * lh // H).clip(0, lh - 1), (uu * lw // W).clip(0, lw - 1)]
+        d = self.D[vv, uu]
+        m = (lab == lid) & (d > 0.1)
+        if m.sum() == 0:
+            return np.zeros((0, 3))
+        u, v, z = uu[m].astype(float), vv[m].astype(float), d[m]
+        P = np.stack([(u - self.K[0, 2]) / self.K[0, 0] * z, (v - self.K[1, 2]) / self.K[1, 1] * z, z], 1)
+        P = P @ self.Twc[:3, :3].T + self.Twc[:3, 3]
+        if len(P) > max_n:
+            P = P[np.random.default_rng(0).choice(len(P), max_n, replace=False)]
+        return P
+
+    def mask_px(self, lid):
+        return 0 if self.labels is None else int((self.labels == lid).sum())
 
     def zbuf(self, verts_world: torch.Tensor, faces):
         M = torch.tensor(self.Tcw, dtype=torch.float32, device="cuda")
@@ -106,11 +135,12 @@ class MeshTracker:
         self.objs = {o.name: o for o in objects}
         self.state = {o.name: ObjState(np.asarray(init_poses[o.name], float)) for o in objects}
         self.arm = arm_model
-        self.cfg = dict(contact=0.03, grasp_tip=0.03, grip_close=0.06, release_open=0.15, icp_iters=6, huber=0.005,
+        self.cfg = dict(contact=0.03, grasp_tip=0.02, grip_close=0.15, release_open=0.15, icp_iters=6, huber=0.005, held_max_corr=0.01, held_blend=0.1, held_blend_mask=0.3, mask_min_pts=60, mask_move_gate=0.002,
                         max_corr=0.03, free_tol=0.015, min_inl=40, move_gate=0.003, flow=True)
         self.cfg.update(cfg or {})
         self.prev = None                            # previous tick's views (for flow / track Kabsch)
         self.tick = -1
+        self.lib_points, self.region, self.plane, self.bg_colors, self._cm = None, None, None, None, {}
 
     # -------------------------------------------------------------- robot
     def robot(self, q: dict, T_world_base: dict):
@@ -123,8 +153,9 @@ class MeshTracker:
             Vw = V @ Tb_t[:3, :3].T + Tb_t[:3, 3]
             L = self.arm.link_tf(qt)
             G = Tb @ L["gripper"][0].cpu().numpy().astype(float)
-            tips = np.concatenate([(Tb @ L[k][0].cpu().numpy().astype(float))[None] for k in ("tip_left", "tip_right")])
-            out[arm_] = dict(V=Vw, G=G, tips=tips[:, :3, 3], grip=float(q[arm_][6]))
+            # finger pads = the finger link mesh vertices (the link origins sit inside the gripper body)
+            fingers = [Vw[self.arm.vlink == self.arm.links.index(k)].cpu().numpy() for k in ("tip_left", "tip_right")]
+            out[arm_] = dict(V=Vw, G=G, fingers=fingers, grip=float(q[arm_][6]))
         return out
 
     # -------------------------------------------------------------- main step
@@ -150,8 +181,9 @@ class MeshTracker:
                 else:
                     st.T = r["G"] @ st.T_grip_obj
             else:
+                tree = cKDTree(P)
                 for arm_, r in rob.items():
-                    d = cKDTree(P).query(r["tips"])[0]
+                    d = np.array([tree.query(f)[0].min() for f in r["fingers"]])
                     if d.max() < self.cfg["grasp_tip"] and r["grip"] < 1.0 - self.cfg["grip_close"]:
                         st.held = arm_
                         st.grip_at_grasp = r["grip"]
@@ -165,29 +197,145 @@ class MeshTracker:
             Vw = o.verts_t @ Tt[:3, :3].T + Tt[:3, 3]
             obj_z[name] = [v.zbuf(Vw, o.faces_t).cpu().numpy() for v in views]
         out = {}
-        for name, st in self.state.items():
+        Rv = torch.cat([r["V"] for r in rob.values()]).cpu().numpy()[::7]
+        prevT = {n: (st.history[-1] if st.history else st.T).copy() for n, st in self.state.items()}
+        moved = {}                                                   # objects already updated this tick: delta pose
+        order = sorted(self.state, key=lambda n: self.state[n].held is None)      # held objects first
+        for name in order:
+            st = self.state[name]
             o = self.objs[name]
-            near_robot = min(cKDTree((st.T[:3, :3] @ o.samples.T).T + st.T[:3, 3]).query(
-                torch.cat([r["V"] for r in rob.values()]).cpu().numpy()[::7], distance_upper_bound=self.cfg["contact"])[0].min(),
-                1.0) < self.cfg["contact"]
-            moving = st.held is not None or near_robot
+            Pw = (st.T[:3, :3] @ o.samples.T).T + st.T[:3, 3]
+            tree = cKDTree(Pw)
+            near_robot = tree.query(Rv, distance_upper_bound=self.cfg["contact"])[0].min() < self.cfg["contact"]
+            # object-object contact: a neighbour that moved this tick may push / carry this object
+            carriers = []
+            for other, dT in moved.items():
+                if np.linalg.norm(dT[:3, 3]) < 0.002:
+                    continue
+                So = self.state[other].T
+                Q = (So[:3, :3] @ self.objs[other].samples[::3].T).T + So[:3, 3]
+                dmin = tree.query(Q, distance_upper_bound=0.02)[0].min()
+                if dmin < 0.02:
+                    carriers.append(dT)
+                    # carried: in contact with an object a gripper moves fast (e.g. debris in a lifted dustpan)
+                    if (st.held is None and st.carrier is None and self.state[other].held is not None
+                            and np.linalg.norm(o.mesh.extents) < 0.5 * np.linalg.norm(self.objs[other].mesh.extents)
+                            and dmin < 0.015 and np.linalg.norm(dT[:3, 3]) > 0.005):
+                        st.carrier = other
+                        st.T_car_obj = np.linalg.inv(prevT[other]) @ st.T
+            if st.carrier is not None:
+                car = self.state[st.carrier]
+                if car.held is None and np.linalg.norm(moved.get(st.carrier, np.eye(4))[:3, 3]) < 0.002:
+                    st.carrier, st.T_car_obj = None, None                       # carrier put down: object rests
+                else:
+                    st.T = car.T @ st.T_car_obj
+            # ---- mask-backed update (object masks from the causal segmenter): the main path
+            lid = list(self.objs).index(name) + 1
+            M = np.concatenate([v.masked_points(lid) for v in views]) if any(v.labels is not None for v in views) else np.zeros((0, 3))
+            if len(M) >= self.cfg["mask_min_pts"]:
+                if st.held is not None:
+                    G = rob[st.held]["G"]
+                    T1, res = self.icp_masked(o, st.T, M)
+                    dT = T1 @ np.linalg.inv(st.T)
+                    dang = np.degrees(np.arccos(np.clip((np.trace(dT[:3, :3]) - 1) / 2, -1, 1)))
+                    if res[1] >= self.cfg["mask_min_pts"] and np.linalg.norm(dT[:3, 3]) < 0.03 and dang < 10:
+                        T_new = np.linalg.inv(G) @ T1
+                        a_ = self.cfg["held_blend_mask"]
+                        Tb = st.T_grip_obj.copy()
+                        Tb[:3, 3] = (1 - a_) * Tb[:3, 3] + a_ * T_new[:3, 3]
+                        U, _, Vt = np.linalg.svd((1 - a_) * Tb[:3, :3] + a_ * T_new[:3, :3])
+                        Tb[:3, :3] = U @ Vt
+                        st.T_grip_obj = Tb
+                        st.T = G @ Tb
+                    st.last_res = res
+                else:
+                    cands = [st.T.copy()]
+                    if st.carrier is None:
+                        cands += [dT @ st.T for dT in carriers]
+                    if self.cfg["flow"] and self.prev is not None and st.carrier is None:
+                        Tk = self.track_kabsch(o, st.T, views, self.prev, robot_z)
+                        if Tk is not None:
+                            cands.append(Tk @ st.T)
+                    best = None
+                    for T0 in cands:
+                        T1, res = self.icp_masked(o, T0, M)
+                        if res[1] >= self.cfg["mask_min_pts"] and (best is None or res[0] < best[1][0]):
+                            best = (T1, res)
+                    if best is None:                                  # mask present, pose far off: re-localize
+                        st.lost += 1
+                        if st.lost >= 3 and (st.lost - 3) % 15 == 0 and len(M) >= 300 and self.lib_points is not None:
+                            from . import objlib
+                            Pl, Cl = self.lib_points[o.name]
+                            Tr, fit, rmse = objlib.register(Pl, Cl, M, np.full((len(M), 3), 0.5), voxel=0.004, seed=self.tick)
+                            if fit > 0.4 and rmse < 0.005:
+                                st.T = Tr; st.lost = 0; st.relocs += 1; st.carrier = None
+                        st.last_res = (np.nan, 0)
+                    else:
+                        T1, res = best
+                        st.lost = 0
+                        dT = T1 @ np.linalg.inv(st.T)
+                        dmove = np.linalg.norm(dT[:3, 3])
+                        dang = np.degrees(np.arccos(np.clip((np.trace(dT[:3, :3]) - 1) / 2, -1, 1)))
+                        # move on clear evidence only (no jitter of resting objects), never by jumps
+                        if (dmove > self.cfg["mask_move_gate"] or dang > 1.5) and dmove < 0.08:
+                            st.T = T1
+                            if st.carrier is not None:
+                                st.T_car_obj = np.linalg.inv(self.state[st.carrier].T) @ st.T
+                        st.last_res = res
+                moved[name] = st.T @ np.linalg.inv(prevT[name])
+                out[name] = st.T.copy()
+                st.history.append(st.T.copy())
+                continue
+            moving = (st.held is not None or near_robot or bool(carriers)) and st.carrier is None
             if moving:
-                T0 = st.T.copy()
-                if st.held is None and self.cfg["flow"] and self.prev is not None:
-                    Tk = self.track_kabsch(o, st.T, views, self.prev, robot_z)
-                    if Tk is not None:
-                        T0 = Tk @ st.T
-                T1, res = self.icp(o, T0, views, robot_z, obj_z, name)
-                if res[1] >= self.cfg["min_inl"]:
-                    # static-but-touched objects only move on clear evidence
-                    dmove = np.linalg.norm(T1[:3, 3] - st.T[:3, 3])
-                    if st.held is not None or dmove > self.cfg["move_gate"]:
+                cands = [st.T.copy()]
+                if st.held is None:
+                    cands += [dT @ st.T for dT in carriers]
+                    if self.cfg["flow"] and self.prev is not None:
+                        Tk = self.track_kabsch(o, st.T, views, self.prev, robot_z)
+                        if Tk is not None:
+                            cands.append(Tk @ st.T)
+                best = None
+                for T0 in cands:
+                    T1, res = self.icp(o, T0, views, robot_z, obj_z, name)
+                    if res[1] >= self.cfg["min_inl"] and (best is None or res[0] < best[1][0]):
+                        best = (T1, res)
+                if best is not None:
+                    T1, res = best
+                    dT = T1 @ np.linalg.inv(st.T)
+                    dmove = np.linalg.norm(dT[:3, 3])
+                    dang = np.degrees(np.arccos(np.clip((np.trace(dT[:3, :3]) - 1) / 2, -1, 1)))
+                    if st.held is not None:
+                        # held: the gripper FK carries the object; ICP may only correct small slip (<= 1 cm, 5 deg),
+                        # blended slowly into the grasp offset (no drift from a wrong ICP lock)
+                        if dmove < self.cfg["held_max_corr"] and dang < 5.0:
+                            G = rob[st.held]["G"]
+                            T_new = np.linalg.inv(G) @ T1
+                            a_ = self.cfg["held_blend"]
+                            Tb = st.T_grip_obj.copy()
+                            Tb[:3, 3] = (1 - a_) * Tb[:3, 3] + a_ * T_new[:3, 3]
+                            U, _, Vt = np.linalg.svd((1 - a_) * Tb[:3, :3] + a_ * T_new[:3, :3])
+                            Tb[:3, :3] = U @ Vt
+                            st.T_grip_obj = Tb
+                            st.T = G @ Tb
+                    elif dmove > self.cfg["move_gate"] and dmove < 0.05:
+                        # free objects move only on clear evidence (contact + ICP), and not by jumps
                         st.T = T1
-                    if st.held is not None:                            # slow update of the grasp offset (slip)
-                        st.T_grip_obj = np.linalg.inv(rob[st.held]["G"]) @ st.T
-                st.last_res = res
+                    st.last_res = res
+                else:
+                    st.last_res = self.residual(o, st.T, views, robot_z, obj_z, name)
             else:
                 st.last_res = self.residual(o, st.T, views, robot_z, obj_z, name)
+            # lost: we look through where a free object should be -> causal re-localization (swept / carried objects)
+            if st.held is None:
+                vio = self.see_through(o, st.T, views, robot_z, obj_z, name)
+                st.lost = st.lost + 1 if vio > 0.5 else 0
+                if st.lost >= 3 and (st.lost - 3) % 5 == 0:
+                    excl = [(self.state[n].T[:3, :3] @ self.objs[n].samples.T).T + self.state[n].T[:3, 3] for n in self.state if n != name]
+                    Tr = self.relocalize(o, views, rob, excl)
+                    if Tr is not None:
+                        st.T = Tr; st.lost = 0; st.relocs += 1; st.carrier = None; st.T_car_obj = None
+            moved[name] = st.T @ np.linalg.inv(prevT[name])
             out[name] = st.T.copy()
             st.history.append(st.T.copy())
         self.prev = views
@@ -260,6 +408,33 @@ class MeshTracker:
                 break
         return T, res
 
+    def icp_masked(self, o, T, M, iters=10):
+        """data -> model point-to-plane ICP of the object's masked depth points M (world) onto the mesh (object frame
+        KD-tree), Huber; right-multiplied update in the object frame. -> T, (median |r|, n)"""
+        T = T.copy()
+        res = (np.nan, 0)
+        for it in range(iters):
+            Ti = np.linalg.inv(T)
+            Mo = M @ Ti[:3, :3].T + Ti[:3, 3]
+            dist, j = o.tree.query(Mo)
+            gate = 0.03 if it < 3 else 0.015
+            ok = dist < gate
+            if ok.sum() < 20:
+                return T, (np.nan, int(ok.sum()))
+            p, n, x = o.icp_pts[j[ok]], o.icp_nrm[j[ok]], Mo[ok]
+            r = ((x - p) * n).sum(1)
+            # model point p moves by dT: p' = p + w x p + v  -> residual r - n.(w x p + v)
+            J = np.c_[np.cross(p, n), n]
+            hub = self.cfg["huber"]
+            wt = np.where(np.abs(r) < hub, 1.0, hub / np.maximum(np.abs(r), 1e-9))
+            H = (J * wt[:, None]).T @ J + 1e-5 * np.eye(6)
+            xi = np.linalg.solve(H, (J * wt[:, None]).T @ r)
+            T = T @ se3_small(xi)
+            res = (float(np.median(np.abs(r))), int(ok.sum()))
+            if np.linalg.norm(xi) < 1e-5:
+                break
+        return T, res
+
     def residual(self, o, T, views, robot_z, obj_z, name):
         rr = []
         for vi, v in enumerate(views):
@@ -269,8 +444,52 @@ class MeshTracker:
             d = v.D[w.astype(int), u.astype(int)]
             ok = (d > 0.1) & (np.abs(d - z) < self.cfg["max_corr"])
             rr.append(np.abs(d[ok] - z[ok]))
+            nv = (d > 0.1).sum(); nf = ((d > 0.1) & (d > z + 0.02)).sum()
+            self._viol = (getattr(self, "_viol", (0, 0))[0] + nf, getattr(self, "_viol", (0, 0))[1] + nv)
         rr = np.concatenate(rr) if rr else np.zeros(0)
         return (float(np.median(rr)) if len(rr) else np.nan, int(len(rr)))
+
+    def see_through(self, o, T, views, robot_z, obj_z, name):
+        """share of the object's visible samples (with depth) whose pixel shows a surface >= 2 cm BEHIND them."""
+        self._viol = (0, 0)
+        self.residual(o, T, views, robot_z, obj_z, name)
+        nf, nv = self._viol
+        return nf / nv if nv >= 30 else 0.0
+
+    def relocalize(self, o, views, rob, exclude):
+        """lost object: colour-gated global registration of the library points into the current cloud (robot and the
+        other objects removed). -> T or None."""
+        from . import objlib
+        if self.lib_points is None or o.name not in self.lib_points:
+            return None
+        Pl, Cl = self.lib_points[o.name]
+        Ps, Cs = [], []
+        for v in views:
+            if v.rgb is None:
+                continue
+            P, C, _, _ = objlib.depth_points(v.D, v.rgb, v.K, v.Twc, stride=2)
+            Ps.append(P); Cs.append(C)
+        if not Ps:
+            return None
+        P, C = np.concatenate(Ps), np.concatenate(Cs)
+        if self.region is not None:
+            k = objlib.table_crop(P, self.region, *self.plane, above=0.003)
+            P, C = P[k], C[k]
+        R = torch.cat([r["V"] for r in rob.values()]).cpu().numpy()[::3]
+        keep = objlib.robot_free(P, R, 0.02)
+        for X in exclude:
+            keep &= objlib.robot_free(P, X, 0.01)
+        P, C = P[keep], C[keep]
+        if o.name not in self._cm:
+            self._cm[o.name] = objlib.colour_model(Cl, np.zeros((0, 3)) if self.bg_colors is None else self.bg_colors)
+        pr = self._cm[o.name](C)
+        cand = pr > 0.5
+        if cand.sum() < 40:
+            return None
+        T, fit, rmse = objlib.register(Pl, Cl, P[cand], C[cand], voxel=0.004, seed=self.tick)
+        if fit > 0.5 and rmse < 0.004:
+            return T
+        return None
 
     def track_kabsch(self, o, T, views, prev, robot_z):
         """2D tracks (DIS optical flow, frame t-1 -> t, top camera) on the object's visible pixels, lifted with both

@@ -36,7 +36,7 @@ class Seq:
 
 
 class HandEyeBA:
-    def __init__(self, arm: TorchArm, T0: dict, cams=("top", "side")):
+    def __init__(self, arm: TorchArm, T0: dict, cams=("top", "side"), rig=False):
         """T0[(cam, arm)] = initial 4x4 T_cam<-base (numpy)."""
         self.arm = arm
         self.cams = cams
@@ -45,9 +45,20 @@ class HandEyeBA:
         self.T0 = {k: torch.tensor(v, dtype=torch.float64, device=DEV) for k, v in T0.items()}
         self.xi = {k: torch.zeros(6, dtype=torch.float64, device=DEV, requires_grad=True) for k in T0}
         self.joff = {a: torch.zeros(6, dtype=torch.float64, device=DEV, requires_grad=True) for a in self.arms}
+        # rig mode: the cameras form one rigid rig (recorder top<->side relative pose kept: their static scenes agree to
+        # ~5 mm); each arm base gets ONE correction, seen identically by both cameras
+        self.rig = rig
+        if rig:
+            self.T_rel = {c: self.T0[(c, "left")] @ torch.linalg.inv(self.T0[(cams[0], "left")]) for c in cams}
+            for c in cams[1:]:
+                for a in self.arms:
+                    self.xi[(c, a)].requires_grad_(False)
 
     # ---------------------------------------------------------------- kinematics
     def T_cb(self, cam, a):
+        if self.rig:
+            c0 = self.cams[0]
+            return self.T_rel[cam] @ (se3_exp(self.xi[(c0, a)]) @ self.T0[(c0, a)])
         return se3_exp(self.xi[(cam, a)]) @ self.T0[(cam, a)]
 
     def link_T(self, seq, a, ticks, use_off=True):
@@ -130,7 +141,7 @@ class HandEyeBA:
         X = torch.tensor(np.stack([o["X"] for o in obs]), dtype=torch.float64, device=DEV, requires_grad=True)
         knots = {k: (torch.tensor(t, dtype=torch.float64, device=DEV), torch.tensor(v, dtype=torch.float64, device=DEV, requires_grad=fit_lag))
                  for k, (t, v) in lag_knots.items()}
-        params = [{"params": list(self.xi.values()), "lr": lr}, {"params": [X], "lr": lr * 2}]
+        params = [{"params": [v for v in self.xi.values() if v.requires_grad], "lr": lr}, {"params": [X], "lr": lr * 2}]
         if fit_lag:
             params.append({"params": [v for _, v in knots.values()], "lr": 0.05})
         if fit_offsets:

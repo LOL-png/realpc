@@ -29,7 +29,8 @@ def mean_pose(Ts):
 
 
 class RigCalib:
-    def __init__(self, T_cam_base: dict, lags: dict | None = None, joint_offsets: dict | None = None, name=""):
+    def __init__(self, T_cam_base: dict, lags: dict | None = None, joint_offsets: dict | None = None, name="", const_lag=0.0):
+        self.const_lag = float(const_lag)
         self.Tcb = {k: np.asarray(v, float) for k, v in T_cam_base.items()}          # {(cam, arm): 4x4}
         self.lags = lags or {}                                                       # {"task/ep:cam": (ticks, lag)}
         self.joff = joint_offsets or {}
@@ -42,6 +43,8 @@ class RigCalib:
         Tcb = {tuple(k.split("/")): np.asarray(v) for k, v in d["T_cam_base"].items()}
         lags = {k: (np.asarray(v["knot_ticks"], float), np.asarray(v["lag_ticks"], float)) for k, v in d.get("lags", {}).items()}
         joff = {k: np.asarray(v, float) for k, v in d.get("joint_offsets_rad", {}).items()}
+        if d.get("const_lag") is not None:                       # one constant lag per camera (USER 11-09 01:45)
+            return cls(Tcb, {}, joff, name=path, const_lag=d["const_lag"])
         return cls(Tcb, lags, joff, name=path)
 
     @classmethod
@@ -69,7 +72,7 @@ class RigCalib:
     def lag(self, ep, cam, t):
         k = f"{ep.task}/{ep.name}:{cam}"
         if k not in self.lags:
-            return 0.0
+            return self.const_lag
         kt, kv = self.lags[k]
         return float(np.interp(t, kt, kv))
 
@@ -77,7 +80,12 @@ class RigCalib:
         return t - self.lag(ep, cam, t)
 
     def q_at(self, ep, arm, tq):
-        return _interp_rows(np.asarray(ep.low[f"joint_pos_{arm}"], float), tq)
+        """joint vector (6 joints + gripper) of `arm` at fractional robot tick tq, joint zero offsets applied."""
+        q = _interp_rows(np.asarray(ep.low[f"joint_pos_{arm}"], float), tq).copy()
+        o = self.joff.get(arm)
+        if o is not None:
+            q[:6] += np.asarray(o, float)
+        return q
 
     def joint_offsets(self, arm):
         o = self.joff.get(arm)

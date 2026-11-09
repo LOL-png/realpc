@@ -8,3 +8,5 @@ out/
 cache/
 .model_cache/
 .cache/
+
+!assets/objects/*/*_points.npz

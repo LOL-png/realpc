@@ -211,7 +211,7 @@ def carve(views, lo, hi, voxel=0.003, tol=0.008, plane=None, min_free=2, free_fr
     return occ, lo, voxel, seen.reshape(shape)
 
 
-def occupancy_mesh(occ, lo, voxel, seed_pts=None, smooth=10):
+def occupancy_mesh(occ, lo, voxel, seed_pts=None, smooth=4, sigma=0.5):
     """largest (or seed-containing) component of an occupancy grid -> watertight trimesh."""
     import trimesh
     from scipy import ndimage
@@ -233,7 +233,7 @@ def occupancy_mesh(occ, lo, voxel, seed_pts=None, smooth=10):
         sizes = ndimage.sum(occ, lab, range(1, nl + 1))
         occ = lab == (1 + int(np.argmax(sizes)))
     occ = ndimage.binary_fill_holes(occ)
-    vol = np.pad(ndimage.gaussian_filter(occ.astype(np.float32), 0.7), 1)
+    vol = np.pad(ndimage.gaussian_filter(occ.astype(np.float32), sigma), 1)
     V, F, _, _ = measure.marching_cubes(vol, 0.5)
     V = (V - 1 + 0.5) * voxel + lo
     m = trimesh.Trimesh(V, F[:, ::-1], process=True)
@@ -262,6 +262,19 @@ def footprint_fill(occ, lo, voxel, P, plane, max_gap=0.03):
     order = np.lexsort((h, key))
     key_s, first = np.unique(key[order], return_index=True)
     out = occ.copy()
+    # 2D holes of the resting footprint (e.g. a dark tray with no depth) are closed by a table-level floor slab
+    from scipy import ndimage
+    fp = np.zeros((shape[other[0]], shape[other[1]]), bool)
+    low = np.array([h[order[fi]] <= max_gap for fi in first])
+    fp[key_s[low] // shape[other[1]], key_s[low] % shape[other[1]]] = True
+    filled = ndimage.binary_fill_holes(ndimage.binary_closing(fp, iterations=2)) & ~fp
+    for a_, b_ in np.argwhere(filled):
+        for z in range(shape[ax]):
+            sl = [0, 0, 0]; sl[other[0]] = a_; sl[other[1]] = b_; sl[ax] = z
+            X = lo + (np.array(sl) + 0.5) * voxel
+            hz = X @ n + d
+            if -0.0005 <= hz <= 0.004:
+                out[tuple(sl)] = True
     for kk, fi in zip(key_s, first):
         j = order[fi]
         if h[j] > max_gap:
@@ -290,3 +303,11 @@ def object_occupancy(free_or_occ, lo, voxel, P, near=0.015):
     occP = ndimage.binary_dilation(occP, iterations=1)
     dist = ndimage.distance_transform_edt(~occP) * voxel
     return (occ | occP) & (dist < near)
+
+
+def surface_residual(mesh, P, n=60000):
+    """distance (m) of points P to the mesh surface (dense surface samples)."""
+    import trimesh
+    S, _ = trimesh.sample.sample_surface_even(mesh, n, seed=0)
+    d, _ = cKDTree(np.asarray(S)).query(P)
+    return d
