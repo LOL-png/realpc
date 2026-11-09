@@ -33,13 +33,20 @@ class Episode:
     def __init__(self, path: str):
         self.path = path
         self.files = sorted(glob.glob(os.path.join(path, "fused", "*.npz")))
-        if not self.files:
-            raise FileNotFoundError(f"no fused/*.npz in {path}")
+        if not self.files and not os.path.exists(os.path.join(path, "low_dim.npz")):
+            raise FileNotFoundError(f"no fused/*.npz or low_dim.npz in {path}")
         self.seq = [int(os.path.basename(f)[:-4]) for f in self.files]       # fusion counter, NOT the video tick
         self.calib = json.load(open(os.path.join(path, "calib.json")))
         self.meta = json.load(open(os.path.join(path, "meta.json"))) if os.path.exists(os.path.join(path, "meta.json")) else {}
         lp = os.path.join(path, "low_dim.npz")
         self.low = dict(np.load(lp)) if os.path.exists(lp) else None
+        if not self.files:                            # video-only download: one "frame" per video tick
+            self.times = np.asarray(self.low["t_cap"], float)
+            self.seq = list(range(len(self.times)))
+            self.ticks = list(range(len(self.times)))
+            self.name = os.path.basename(os.path.normpath(path))
+            self.task = os.path.basename(os.path.dirname(os.path.normpath(path)))
+            return
         self.times = np.array([float(np.load(f)["t"]) for f in self.files])
         # video / low_dim tick of each fused cloud: the tick whose top-camera capture time equals the cloud's time
         if self.low is not None and "t_cap" in self.low:
@@ -130,3 +137,50 @@ class DepthSource:
 
     def pose(self, tick: int) -> np.ndarray:
         return np.asarray(self.ep.low[f"cam_pose_{self.cam}"][tick], float)
+
+
+def read_depth_frames(mkv_path: str, indices) -> dict:
+    """decode the 16-bit depth video once, keeping only `indices` (no cache on disk) -> {tick: uint16 HxW}."""
+    import subprocess
+    want = set(int(i) for i in indices)
+    info = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                           "-of", "csv=p=0", mkv_path], capture_output=True, text=True).stdout.strip().split(",")
+    W, H = int(info[0]), int(info[1])
+    proc = subprocess.Popen(["ffmpeg", "-v", "error", "-i", mkv_path, "-f", "rawvideo", "-pix_fmt", "gray16le", "-"],
+                            stdout=subprocess.PIPE)
+    out, t = {}, 0
+    last = max(want) if want else -1
+    while t <= last:
+        buf = proc.stdout.read(W * H * 2)
+        if len(buf) < W * H * 2:
+            break
+        if t in want:
+            out[t] = np.frombuffer(buf, np.uint16).reshape(H, W).copy()
+        t += 1
+    proc.kill(); proc.wait()
+    return out
+
+
+class DepthStream:
+    """sequential 16-bit depth reader (ffmpeg pipe), the offline stand-in for a live depth camera: next() -> (tick, uint16)."""
+
+    def __init__(self, mkv_path: str, start: int = 0):
+        import subprocess
+        info = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                               "-of", "csv=p=0", mkv_path], capture_output=True, text=True).stdout.strip().split(",")
+        self.W, self.H = int(info[0]), int(info[1])
+        self.proc = subprocess.Popen(["ffmpeg", "-v", "error", "-i", mkv_path, "-f", "rawvideo", "-pix_fmt", "gray16le", "-"],
+                                     stdout=subprocess.PIPE)
+        self.t = -1
+        while self.t < start - 1:
+            self.next()
+
+    def next(self):
+        buf = self.proc.stdout.read(self.W * self.H * 2)
+        if len(buf) < self.W * self.H * 2:
+            return None
+        self.t += 1
+        return self.t, np.frombuffer(buf, np.uint16).reshape(self.H, self.W)
+
+    def close(self):
+        self.proc.kill(); self.proc.wait()
