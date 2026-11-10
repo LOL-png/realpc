@@ -603,6 +603,24 @@ class MeshTracker:
     def sil_refine(self, o, T, views, robot_z, lid, alternatives=()):
         """a few Adam steps on a 6-DoF correction (object frame) maximising the support-weighted soft-silhouette IoU
         with the object's mask in every camera (robot pixels and other objects ignored), prior to the current pose."""
+        if self.cfg["depth_mesh"] and any(getattr(v,"depth_generated",False) for v in views):
+            import copy
+            adapted=[]
+            for v in views:
+                vv=copy.copy(v)
+                if getattr(v,"depth_generated",False):
+                    material=getattr(v,"depth_appearance",{}).get(lid)
+                    own=v.labels==lid
+                    # Only use an independently discriminative appearance cue.
+                    # In shadow / on multi-material tools, pure self-associated
+                    # depth contours can reinforce the wrong pose or shrink it.
+                    if material is None or (material&own).sum()<max(40,.65*own.sum()):
+                        vv.labels=None
+                    else:
+                        vv.labels=v.labels.copy();vv.labels[own]=0
+                        vv.labels[material&((v.labels==0)|own)]=lid
+                adapted.append(vv)
+            views=adapted
         if os.environ.get("REALPC_SIL_METHOD", "adam") == "contour":
             from .joint_pose import refine_contours
             return refine_contours(o, T, views, robot_z, lid, alternatives)

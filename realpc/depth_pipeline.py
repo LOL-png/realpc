@@ -22,10 +22,18 @@ class DepthMeshPipeline:
                 st=c.trk.state[n]
                 if st.held is not None:
                     st.T=rob[st.held]['G']@st.T_grip_obj
-                else:
-                    others=[o.samples@c.trk.state[k].T[:3,:3].T+c.trk.state[k].T[:3,3] for k,o in c.trk.objs.items() if k!=n and c.trk.state[k].valid]
-                    T=c.trk.relocalize(c.trk.objs[n],views,rob,others)
-                    if T is not None:st.T=T;st.valid=True;st.carrier=None;st.T_car_obj=None
+                others=[o.samples@c.trk.state[k].T[:3,:3].T+c.trk.state[k].T[:3,3] for k,o in c.trk.objs.items() if k!=n and c.trk.state[k].valid]
+                T=c.trk.relocalize(c.trk.objs[n],views,rob,others)
+                if T is not None:
+                    st.T=T;st.valid=True;st.carrier=None;st.T_car_obj=None
+                    if st.held is not None:
+                        from scipy.spatial import cKDTree
+                        W=c.trk.objs[n].samples@T[:3,:3].T+T[:3,3]
+                        arm=rob[st.held];tree=cKDTree(W)
+                        contact=max(tree.query(f)[0].min() for f in arm['fingers'])<.035
+                        if not contact or arm['grip']>st.grip_at_grasp+.05:
+                            st.held=None;st.T_grip_obj=None
+                        else:st.T_grip_obj=np.linalg.inv(arm['G'])@T
                 self.last_recovery[n]=t;self.bad[n]=0
         from .online_masks import OnlineObjectSegmenter
         sampler=OnlineObjectSegmenter(c,self.model,reset_tracker_on_seed=initial)

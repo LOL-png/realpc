@@ -22,7 +22,7 @@ def associate_depth(tracker, views, robot_z, object_z):
         robot=(rz<1e8)&((D<.1)|(rz<=D+.012))
         valid &= ~robot
         rgb=cv2.cvtColor(cv2.resize(v.rgb,(w,h)),cv2.COLOR_BGR2RGB).reshape(-1,3)/255. if v.rgb is not None else None
-        best=np.full((h,w),np.inf);labels=np.zeros((h,w),np.uint8)
+        best=np.full((h,w),np.inf);labels=np.zeros((h,w),np.uint8);appearance={}
         for oi,name in enumerate(names,1):
             st=tracker.state[name]
             if not st.valid:continue
@@ -53,6 +53,8 @@ def associate_depth(tracker, views, robot_z, object_z):
                 # not erase depth support for a shadowed, moving object.
                 color_cost=.003*(1-tracker.depth_color[name](rgb[idx]))
             if not usable.any():continue
+            app=np.zeros((h,w),bool);app.ravel()[idx[usable&(color_cost<.0018)]]=True
+            appearance[oi]=app
             idx=idx[usable];score=(dist+color_cost)[usable]
             win=score<best.ravel()[idx]
             best.ravel()[idx[win]]=score[win];labels.ravel()[idx[win]]=oi
@@ -61,6 +63,7 @@ def associate_depth(tracker, views, robot_z, object_z):
         labels[~((D>.1)&np.isfinite(D))]=254
         v.labels=labels
         v.depth_generated=True
+        v.depth_appearance=appearance if rgb is not None else {}
         # Keep the exact returns that passed robot/table/surface rejection.
         # Upsampling the labels onto other depth pixels can reintroduce foreground
         # robot edges and table returns which were never tested above.
