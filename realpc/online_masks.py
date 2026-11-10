@@ -35,6 +35,11 @@ class ObjectMaskStream:
                 image_predictor=SAM2ImagePredictor(model)
                 image_predictor.set_image(cv2.cvtColor(image,cv2.COLOR_BGR2RGB))
             for oid, m in seeds.items():
+                if not np.any(m):
+                    # Reserve an occluded instance ID at initialization. SAM2
+                    # cannot add a new object ID after propagation starts.
+                    model.add_new_mask(state,frame_idx=0,obj_id=int(oid),mask=m)
+                    continue
                 if image_refine and oid in cloth_ids:
                     refined=refine_cloth_seed(image_predictor,m,image.shape[:2])
                     model.add_new_mask(state,frame_idx=0,obj_id=int(oid),mask=refined)

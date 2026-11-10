@@ -99,6 +99,11 @@ def convert_episode(ep_path, out_root, config, assets, calibration, stop=None, s
                 cloth_metrics.append(row['cloth_metrics'])
                 cloth_X.append(row['cloth_vertices'])
             if t % 50 == 0:
+                progress=dict(tick=t,elapsed_seconds=time.perf_counter()-start,
+                    sam_frames=len(pipeline.masks.events),config_sha256=config_hash,
+                    health=pipeline.masks.health,latest_events=pipeline.masks.events[-2:])
+                progress_path=dest/(ep.name+'_progress.json')
+                temp=progress_path.with_suffix('.tmp.json');temp.write_text(json.dumps(progress,indent=2));temp.replace(progress_path)
                 print(ep.task, ep.name, t, 'seconds', round(time.perf_counter() - start, 1),
                       'SAM frames', len(pipeline.masks.events), flush=True)
     finally:

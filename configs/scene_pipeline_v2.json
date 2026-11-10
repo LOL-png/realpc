@@ -3,7 +3,7 @@
   "segmentation": {
     "interval": 10,
     "checkpoint": "/home/howardji/realpc/.model_cache/sam2/sam2.1_hiera_small.pt",
-    "failure_cooldown": 3,
+    "failure_cooldown": 8,
     "failure_frames": 3,
     "min_visible_pixels": 80,
     "max_free_fraction": 0.4,
@@ -24,7 +24,12 @@
       "surface_gate_m": 0.025
     },
     "cloth_fit_min_coverage": 0.5,
-    "cloth_fit_max_median_mm": 25
+    "cloth_fit_max_median_mm": 25,
+    "urgent_cooldown": 3,
+    "urgent_support_pixels": 5,
+    "urgent_free_fraction": 0.9,
+    "urgent_area_ratio": 0.3,
+    "urgent_cross_recall": 0.25
   },
   "rigid_environment": {
     "REALPC_SIL": "1",

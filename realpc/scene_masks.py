@@ -56,6 +56,8 @@ class SceneMaskStream:
             if cam not in self.memory:
                 seeds, zbufs, ids = render_seeds(c, cam, image.shape[:2], q)
                 colors = {i + 1: c.trk.lib_points[o.name][1] for i, o in enumerate(c.objs)}
+                for oid in range(1,len(c.objs)+1):
+                    seeds.setdefault(oid,np.zeros(image.shape[:2],bool))
                 cloth_ids = ()
                 if proposal is not None:
                     seed = proposal['initial'] if cam == 'top' else (
@@ -121,7 +123,18 @@ class SceneMaskStream:
         cloth_failed = bool(proposal and proposal['bad'])
         failure = bool(self.pending) or cloth_failed or self.cloth_recovery_pending
         periodic = self.interval > 0 and t - self.last_sam >= self.interval
-        refresh = periodic or (failure and t - self.last_sam >= self.config['failure_cooldown'])
+        urgent=any(d.get('visible',0)>=self.config['min_visible_pixels']
+                   and d.get('support',0)<self.config.get('urgent_support_pixels',5)
+                   and d.get('free_fraction',0)>self.config.get('urgent_free_fraction',.9)
+                   for name,d in self.health.items() if name in self.pending)
+        if proposal:
+            urgent |= any(d['area']<self.config['cloth_health']['min_area']
+                          or d['area_ratio']<self.config.get('urgent_area_ratio',.3)
+                          or (d['cross_support']>self.config['cloth_health']['min_cross_support']
+                              and d['cross_recall']<self.config.get('urgent_cross_recall',.25))
+                          for d in proposal['diagnostics'].values())
+        cooldown=self.config.get('urgent_cooldown',3) if urgent else self.config['failure_cooldown']
+        refresh = periodic or (failure and t - self.last_sam >= cooldown)
         if refresh:
             for name in self.pending:
                 st = c.trk.state[name]
