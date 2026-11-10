@@ -191,7 +191,8 @@ class OnlineObjectSegmenter:
             for oid,seed in seeds.items():
                 if oid>=254 or (lab==oid).sum()>=40:continue
                 z=zbufs[ids.index(oid)];support=seed&(depth>.1)&(abs(depth-z)<.015)
-                if support.sum()<60:continue
+                projected=int((z>0).sum())
+                if support.sum()<max(60,.35*projected):continue
                 if predictor is None:
                     predictor=SAM2ImagePredictor(self.model)
                     with torch.inference_mode(),torch.autocast('cuda',dtype=torch.bfloat16):predictor.set_image(cv2.cvtColor(image,cv2.COLOR_BGR2RGB))
@@ -205,5 +206,5 @@ class OnlineObjectSegmenter:
                 with torch.inference_mode(),torch.autocast('cuda',dtype=torch.bfloat16):
                     self.model.add_new_mask(memory.state,frame_idx=memory.t,obj_id=int(oid),mask=mask)
                 lab[lab==oid]=0;lab[mask]=oid
-                changes.append({'camera':c,'object':self.conv.objs[oid-1].name,'depth_seed_pixels':int(support.sum()),'mask_pixels':int(mask.sum())})
+                changes.append({'camera':c,'object':self.conv.objs[oid-1].name,'depth_seed_pixels':int(support.sum()),'projected_pixels':projected,'depth_fraction':float(support.sum()/projected),'mask_pixels':int(mask.sum())})
         return changes
