@@ -44,8 +44,8 @@ class CausalClothTracker:
         keys=inspect.signature(cls).parameters
         return cls(**{k:v for k,v in config.items() if k in keys})
 
-    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False):
-        self.visible_grasp=visible_grasp;self.back_on_table=back_on_table;self.dynamics_gain=dynamics_gain;self.native_init_iters=native_init_iters;self.table_contact=table_contact;self.support_occlusion=support_occlusion;self.cot_rays_only=cot_rays_only;self.ray_observations=[];self.boundary_grasp=boundary_grasp;self.grasp_seed={};self.init_iters=init_iters;self.coverage_radius=coverage_radius;self.flat_rest=flat_rest;self.silhouette=silhouette;self.dynamics=dynamics;self.endpoint_projection=endpoint_projection;self.idle_gate=idle_gate;self.max_stretch=max_stretch;self.ipc_contact=ipc_contact;self.strain_stiffness=strain_stiffness;self.joint_physics=joint_physics;self.bending=bending;self.gravity=gravity;self.point_grasp=point_grasp;self.length_slack=length_slack;self.paired_grasp=paired_grasp;self.paired_done=set();self.layer_visibility=layer_visibility;self.material_slack=material_slack;self.cell=cell;self.wa=arap;self.wd=data;self.wt=track;self.wp=pin;self.wrists=wrists
+    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False, landmark_grasp=False, init_landmarks=False, native_init_gain=None):
+        self.native_init_gain=native_init_gain;self.init_landmarks=init_landmarks;self.landmark_grasp=landmark_grasp;self.visible_grasp=visible_grasp;self.back_on_table=back_on_table;self.dynamics_gain=dynamics_gain;self.native_init_iters=native_init_iters;self.table_contact=table_contact;self.support_occlusion=support_occlusion;self.cot_rays_only=cot_rays_only;self.ray_observations=[];self.boundary_grasp=boundary_grasp;self.grasp_seed={};self.init_iters=init_iters;self.coverage_radius=coverage_radius;self.flat_rest=flat_rest;self.silhouette=silhouette;self.dynamics=dynamics;self.endpoint_projection=endpoint_projection;self.idle_gate=idle_gate;self.max_stretch=max_stretch;self.ipc_contact=ipc_contact;self.strain_stiffness=strain_stiffness;self.joint_physics=joint_physics;self.bending=bending;self.gravity=gravity;self.point_grasp=point_grasp;self.length_slack=length_slack;self.paired_grasp=paired_grasp;self.paired_done=set();self.layer_visibility=layer_visibility;self.material_slack=material_slack;self.cell=cell;self.wa=arap;self.wd=data;self.wt=track;self.wp=pin;self.wrists=wrists
         self.cm=None;self.tracks={};self.gray={};self.pins={};self.closed={};self.counter=0;self.tick=-1
         self.events=[];self.last_metrics={};self.dense=dense;self.prev_views=None;self.coverage=coverage;self.predict=predict;self.prev_X=None;self.prev_G={};self.plane=plane;self.strain_limit=strain_limit;self.wrist_flow=wrist_flow;self.template=template;self.grasp_layers=grasp_layers;self.cot_weight=cot_weight;self.cot_anchor=cot_anchor;self.cot={};self.cot_checks=[];self.motion_scale=motion_scale;self.robust_depth=robust_depth
 
@@ -257,7 +257,7 @@ class CausalClothTracker:
                 if self.template=='shirt':
                     G=f['G_'+a];local_tips=(tips-G[:3,3])@G[:3,:3];distal=local_tips[:,2]>.12
                     if distal.any():tips=tips[distal]
-                d=cKDTree(tips).query(X)[0]
+                d=cKDTree(tips).query(X)[0];raw_distance=d.copy();landmark_target=None
                 if getattr(self,'visible_grasp',False) and views is not None:
                     from .cloth_physics import visible_vertices
                     seen=np.zeros(len(X),bool)
@@ -269,6 +269,15 @@ class CausalClothTracker:
                 if self.template=='shirt' and self.boundary_grasp:
                     F=self.cm.F;edges=np.sort(np.vstack([F[:,[0,1]],F[:,[1,2]],F[:,[0,2]]]),axis=1);edges,count=np.unique(edges,axis=0,return_counts=True);boundary=np.unique(edges[count==1]);bi=int(boundary[d[boundary].argmin()])
                     if d[bi]<.030:i=bi
+                if getattr(self,'landmark_grasp',False) and views is not None:
+                    candidates=np.asarray(self.template_info['initial_landmark_ids'],int)
+                    corner=int(candidates[raw_distance[candidates].argmin()])
+                    observed=np.concatenate([views[c]['P'] for c in CAMS[:2]])
+                    observed_distance=cKDTree(tips).query(observed)[0]
+                    nearest=int(observed_distance.argmin())
+                    if raw_distance[corner]<.060 and observed_distance[nearest]<.025:
+                        i=corner;landmark_target=observed[nearest].copy()
+                        d=raw_distance.copy();d[i]=observed_distance[nearest]
                 if d[i]<.035:
                     self.grasp_seed[a]=i
                     if self.grasp_layers:
@@ -278,8 +287,10 @@ class CausalClothTracker:
                         dist=dijkstra(self.graph,directed=False,indices=seeds,limit=.012).min(0);idx=np.flatnonzero(dist<.012)
                     else:
                         dist=dijkstra(self.graph,directed=False,indices=i,limit=.018);idx=np.flatnonzero(dist<.018)
-                    G=f['G_'+a];local=(X[idx]-G[:3,3])@G[:3,:3];self.pins[a]=(idx,local)
-                    self.events.append(dict(t=self.tick,arm=a,event='acquire',seed=i,boundary_prior=bool(self.boundary_grasp),vertices=idx.tolist(),distance_mm=float(d[i]*1000)))
+                    G=f['G_'+a];target=X[idx].copy()
+                    if landmark_target is not None:target+=landmark_target-X[i]
+                    local=(target-G[:3,3])@G[:3,:3];self.pins[a]=(idx,local)
+                    self.events.append(dict(t=self.tick,arm=a,event='acquire',seed=i,boundary_prior=bool(self.boundary_grasp),landmark_contact=landmark_target is not None,vertices=idx.tolist(),distance_mm=float(d[i]*1000)))
                 else:self.events.append(dict(t=self.tick,arm=a,event='miss',distance_mm=float(d[i]*1000)))
             if a in self.pins and self.template=='shirt' and getattr(self,'paired_grasp',False):
                 if not hasattr(self,'paired_done'):self.paired_done=set()
@@ -356,8 +367,12 @@ class CausalClothTracker:
                     pair=np.asarray(self.template_info.get('panel_pair',np.arange(len(X))))
                     if pair[center]!=center and pair[center] in ids:hard.append(pair[center])
             choose=np.array([np.flatnonzero(pi==i)[0] for i in hard]);hi,ht=pi[choose],pt[choose]
-        if self.dynamics and self.flat_rest and t==0 and not self.joint_physics:
-            hi=np.asarray(self.template_info['initial_landmark_ids'],int);ht=X[hi].copy()
+        if t==0 and (self.init_landmarks or (self.dynamics and self.flat_rest and not self.joint_physics)):
+            hi=np.asarray(self.template_info['initial_landmark_ids'],int)
+            # Hem corners constrain garment placement; uncertain neck/cuff
+            # silhouette matches must remain free to fit the two depth views.
+            if self.init_landmarks:hi=hi[:2]
+            ht=X[hi].copy()
         mobile=np.full(n,t==0,bool)
         if self.prev_X is not None:mobile |= np.linalg.norm(Xp-self.prev_X,axis=1)>.003
         if len(pi):mobile |= dijkstra(self.graph,directed=False,indices=pi,limit=.20).min(0)<.20
@@ -452,7 +467,7 @@ class CausalClothTracker:
                 if not hasattr(self,'dynamics_state'):self.dynamics_state=ClothDynamics(self.cm.V0,self.cm.F,X,self.template_info['floor_z'],table_plane=getattr(self,'table_plane',None))
                 if iteration==(iters if t==0 and self.joint_physics else 0):dynamic_start=np.array([self.dynamics_state.previous_pins.get(int(i),Xp[i]) for i in hi]).reshape(-1,3)
                 target=ht if t==0 else dynamic_start+(ht-dynamic_start)*(iteration+1)/max(iters,1)
-                X=self.dynamics_state.advance(A,rhs,hi,target,duration=1/30 if t==0 else 1/30/max(iters,1),gain=self.dynamics_gain)
+                X=self.dynamics_state.advance(A,rhs,hi,target,duration=1/30 if t==0 else 1/30/max(iters,1),gain=(self.native_init_gain if t==0 and self.native_init_gain is not None else self.dynamics_gain))
             elif self.template=='shirt' and self.joint_physics:
                 from .cloth_physics import joint_step
                 rays=None
@@ -483,7 +498,10 @@ class CausalClothTracker:
         if self.table_contact:metrics['min_table_clearance_mm']=float((X@np.r_[-self.table_plane[:2],1.]-self.table_plane[2]).min()*1000)
         metrics['idle_gate']=idle;metrics['pins']=len(pi);metrics['ipc_intersections']=self.ipc_state.intersects(X) if self.ipc_contact else None;metrics['ipc_contacts']=self.ipc_state.last_contacts if self.ipc_contact else None;metrics['ipc_alpha']=self.ipc_state.last_alpha if self.ipc_contact else None;metrics['grasp_error_mm']=float(np.max(np.linalg.norm(X[pi]-pt,axis=1))*1000) if len(pi) else 0.;metrics['hard_grasp_error_mm']=float(np.max(np.linalg.norm(X[hi]-ht,axis=1))*1000) if len(hi) else 0.;self.prev_views=v
         if self.dense:metrics['vertex_flow_constraints']=len(vi)
-        self.prev_X=Xp;self.prev_G={a:frame['G_'+a].copy() for a in ('left','right')};self.last_metrics=metrics;return X.copy(),metrics,v
+        # Initialization is registration, not an observed time interval. Do not
+        # extrapolate the t0 fitting displacement as cloth velocity at t1.
+        self.prev_X=X.copy() if t==0 else Xp
+        self.prev_G={a:frame['G_'+a].copy() for a in ('left','right')};self.last_metrics=metrics;return X.copy(),metrics,v
 
     def measure(self,v,checks,counts):
         S=self.cm.samples();tree=cKDTree(S);m={'t':self.tick,'tracks':counts,'cameras':{}}

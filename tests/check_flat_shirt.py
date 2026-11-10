@@ -22,7 +22,9 @@ for t in range(3):
     f=dict(np.load(f'/home/howardji/data_ext/astra_cloth/auto_inputs/frames/{t:04d}.npz'))
     f.update(dict(np.load(f'/home/howardji/data_ext/astra_cloth/auto_cot/{t:04d}.npz')))
     x,m,_=live.step(t,f,iters=2);saved.append(x.copy())
-    if t==0:rest=live.cm.V0.copy();faces=live.cm.sf.copy();bary=live.cm.sb.copy()
+    if t==0:
+        rest=live.cm.V0.copy();faces=live.cm.sf.copy();bary=live.cm.sb.copy()
+        assert np.array_equal(live.prev_X,x), 't0 registration must not create velocity'
     assert np.array_equal(rest,live.cm.V0)
     assert np.array_equal(faces,live.cm.sf) and np.array_equal(bary,live.cm.sb)
     assert not m['ipc_intersections']

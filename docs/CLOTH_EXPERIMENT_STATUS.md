@@ -17,3 +17,7 @@ Recent corrections: actual tilted support plane instead of constant height; tabl
 Primary log: `/home/howardji/point_tracker/plans/ASTRA_Q30_CLOTH_LOG_1109.md`.
 Matching complete diagnostic assets: `/home/howardji/point_tracker/reports/ASTRA_Q30_1110/flat_template_review/` (shirt52b; explicitly not accepted).
 Latest short iterations/checkpoints: `/home/howardji/data_ext/astra_cloth/shirt67` through `shirt75`.
+
+Further diagnostic iterations76–84 test intrinsic grasp-span inconsistency and automatic garment-corner registration. Registration at closure can be incompatible with the retained layered pose; neither solver has yet produced an accepted fold. A confirmed initialization bug is fixed: t0 registration displacement no longer becomes t1 velocity. The corresponding standard live/conversion prefix regression passes. Optional `init_landmarks` now constrains only the two automatically fitted hem corners at frame0, leaving uncertain neck/cuff matches free.
+
+Trial84 completes the first lift with corner registration (at175: grasp centers1.28mm, worst edge distortion2.89%) but surface alignment still fails (top17.16/side8.38mm median). Trial86 is a fresh uninterrupted453-frame audit with explicit initialization gain1 and tracking gain5. It is still a candidate, not a production choice; its two folds must be inspected.
