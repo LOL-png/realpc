@@ -52,7 +52,7 @@ def make_panels(poly,cell=.012,thickness=.002,layers=2):
 
 
 
-def fit_current(views,cell=.012,flat_rest=False,table_plane=None,back_on_table=False,layers=2):
+def fit_current(views,cell=.012,flat_rest=False,table_plane=None,back_on_table=False,layers=2,flexible=False):
     """Optimize a low-dimensional flat pattern, then current-frame drape heights.
     Two cameras contribute geometry; top footprint rejects distant side clutter.
     """
@@ -82,9 +82,9 @@ def fit_current(views,cell=.012,flat_rest=False,table_plane=None,back_on_table=F
     def outline_res(q):
         q=q.reshape(-1,2);samples=np.vstack([a+(b-a)*np.linspace(0,1,12)[:,None] for a,b in zip(q,np.roll(q,-1,axis=0))])
         # Preserve garment structure while allowing asymmetric initial placement.
-        return np.r_[target.query(samples)[0],cKDTree(samples).query(contour[::3])[0],.6*(q-original).ravel(),.3*((q-np.roll(q,1,axis=0))-(original-np.roll(original,1,axis=0))).ravel()]
-    bounds=np.full_like(poly,.03);bounds[6:11]=.015
-    q=least_squares(outline_res,poly.ravel(),bounds=((poly-bounds).ravel(),(poly+bounds).ravel()),max_nfev=35,loss='soft_l1',f_scale=.01)
+        return np.r_[target.query(samples)[0],cKDTree(samples).query(contour[::3])[0],(.12 if flexible else .6)*(q-original).ravel(),(.08 if flexible else .3)*((q-np.roll(q,1,axis=0))-(original-np.roll(original,1,axis=0))).ravel()]
+    bounds=np.full_like(poly,.10 if flexible else .03);bounds[6:11]=.04 if flexible else .015
+    q=least_squares(outline_res,poly.ravel(),bounds=((poly-bounds).ravel(),(poly+bounds).ravel()),max_nfev=200 if flexible else 35,loss='soft_l1',f_scale=.01)
     poly=q.x.reshape(-1,2)
     if flat_rest:
         # Estimate scale from the complete sleeve span and garment length, not
@@ -99,6 +99,18 @@ def fit_current(views,cell=.012,flat_rest=False,table_plane=None,back_on_table=F
         fit_xy=warp(V[:n,:2])
     else:
         V,F,n,pair=make_panels(poly,cell,layers=layers);fit_xy=V[:n,:2]
+    outline_alpha=1.
+    if flexible:
+        # A wide outline fit can invert small triangles under a TPS warp.
+        # Start from a valid planar map; subsequent 3D IPC fitting may fold it.
+        front=F[:len(F)//2] if layers==2 else F
+        source=V[:n,:2].copy()
+        a=source[front];orientation=np.cross(a[:,1]-a[:,0],a[:,2]-a[:,0])
+        while outline_alpha>1e-4:
+            candidate=source+outline_alpha*(fit_xy-source);a=candidate[front]
+            if np.all(np.cross(a[:,1]-a[:,0],a[:,2]-a[:,0])*orientation>orientation**2*.02):break
+            outline_alpha*=.8
+        fit_xy=source+outline_alpha*(fit_xy-source)
     # Smooth, bounded height regression; retain the clean pattern as rest metric.
     distances,js=cKDTree(P[:,:2]).query(fit_xy,k=16);w=np.exp(-(distances/.025)**2)
     heights=(w*P[js,2]).sum(1)/np.maximum(w.sum(1),1e-12)
@@ -121,4 +133,4 @@ def fit_current(views,cell=.012,flat_rest=False,table_plane=None,back_on_table=F
         free=np.flatnonzero(pair[:n]!=np.arange(n))
         X[pair[free],2]=back_height[free]
     V[:,2]+=floor+.002
-    return V,F,X,{'layers':layers,'flat_rest':flat_rest,'back_on_table':back_on_table and layers==2,'fit_parameters':fit.x.tolist(),'outline_rms_mm':float(np.sqrt(np.mean(fun(fit.x)**2))*1000),'panel_vertices':n,'panel_pair':pair.tolist(),'fit_outline':poly.tolist(),'initial_landmark_ids':cKDTree(X[:n,:2]).query(poly[[0,1,3,4,6,10,12,13]])[1].tolist(),'seams':'shared vertices' if layers==2 else 'none: one sheet','floor_z':floor,'current_frame_only':True,'openings':['neck','left cuff','right cuff','hem'] if layers==2 else ['continuous shirt-outline boundary']}
+    return V,F,X,{'outline_warp_alpha':outline_alpha,'flexible_outline':flexible,'layers':layers,'flat_rest':flat_rest,'back_on_table':back_on_table and layers==2,'fit_parameters':fit.x.tolist(),'outline_rms_mm':float(np.sqrt(np.mean(fun(fit.x)**2))*1000),'panel_vertices':n,'panel_pair':pair.tolist(),'fit_outline':poly.tolist(),'initial_landmark_ids':cKDTree(X[:n,:2]).query(poly[[0,1,3,4,6,10,12,13]])[1].tolist(),'seams':'shared vertices' if layers==2 else 'none: one sheet','floor_z':floor,'current_frame_only':True,'openings':['neck','left cuff','right cuff','hem'] if layers==2 else ['continuous shirt-outline boundary']}

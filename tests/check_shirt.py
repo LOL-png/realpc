@@ -71,3 +71,10 @@ assert amount>.001 and fixed[:,2].min()>=.0106-1e-12
 assert np.allclose(fixed[1]-fixed[0],pin[1]-pin[0])
 assert np.array_equal(fixed[2],pin[2])
 print('PASS table-feasible grasp clusters preserve layer separation')
+
+# Finite fabric clearance, not only an intersection test, must survive CCD.
+v=np.array([[0.,0.,0.],[.1,0,0],[0,.1,0],[0,0,.002],[.1,0,.002],[0,.1,.002]])
+f=np.array([[0,1,2],[3,4,5]]);e=np.array([[0,1],[1,2],[0,2],[3,4],[4,5],[3,5]])
+c=IPCContact(v,e,f,min_distance=.0002);target=v.copy();target[3:,2]-=.004
+safe=c.filter(v,target);assert safe[3:,2].min()>=.0002 and not c.intersects(safe)
+print('PASS finite 0.2mm panel clearance through collision filtering')

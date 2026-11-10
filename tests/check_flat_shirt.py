@@ -11,6 +11,8 @@ config=dict(template='shirt',flat_rest=True,material_slack=1.3,length_slack=1.35
     paired_grasp=True,bending=1,joint_physics=True,strain_stiffness=5000,
     strain_limit=.02,ipc_contact=True,layer_visibility=True,idle_gate=True,
     silhouette=True)
+if '--registration' in sys.argv:config.update(init_registration_iters=16,init_registration_strain=200,table_contact=True,back_on_table=True)
+if '--clearance' in sys.argv:config.update(contact_clearance=.0002,feasible_predict=True,predict=True)
 if '--single-layer' in sys.argv:config.update(shirt_layers=1,paired_grasp=False,table_contact=True)
 if '--dynamics' in sys.argv:
     config.update(material_slack=1.15,length_slack=1.25,table_contact=True,
@@ -24,6 +26,9 @@ for t in range(3):
     f.update(dict(np.load(f'/home/howardji/data_ext/astra_cloth/auto_cot/{t:04d}.npz')))
     x,m,_=live.step(t,f,iters=2);saved.append(x.copy())
     if t==0:
+        if '--registration' in sys.argv:
+            assert live.strain_stiffness==5000 and live.wa==2 and live.wd==4 and live.coverage==8 and live.bending==1
+            assert m['initial_registration']['rest_metric_reset'] is False
         rest=live.cm.V0.copy();faces=live.cm.sf.copy();bary=live.cm.sb.copy()
         if '--single-layer' in sys.argv:
             assert len(x)==live.template_info['panel_vertices'] and live.bend_matrix.nnz>0

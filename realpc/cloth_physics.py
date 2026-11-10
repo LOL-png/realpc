@@ -127,7 +127,7 @@ def joint_step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,max_stre
             KKT=sp.bmat([[Hff,Cf.T],[Cf,None]],format='csc')
             sol=sla.spsolve(KKT,np.r_[linear_rhs,-height[active]-C[:,fixed]@delta[fixed]])
             delta[free]=sol[:len(free)]
-    delta=delta.reshape(-1,3);norm=np.linalg.norm(delta,axis=1);delta*=min(1.,.025/max(float(norm.max()),1e-12))
+    delta=delta.reshape(-1,3);norm=np.linalg.norm(delta,axis=1);raw_max=float(norm.max());clip_scale=min(1.,.025/max(raw_max,1e-12));delta*=clip_scale
     result=X+delta
     if endpoint_projection and max_stretch:result=project_extension_endpoint(result,V0,E,pi,limit=max_stretch*.1)
     if table_plane is not None:
@@ -150,17 +150,20 @@ def joint_step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,max_stre
         if contact is not None:value+=contact.energy(Y)
         return value
     before=energy(X)
-    for _ in range(16):
+    for line_steps in range(16):
         if energy(result)<=before+1e-10:break
         direction*=.5;result=X+direction
     else:result=X.copy()
-
+    if contact is not None:
+        contact.last_solve=dict(raw_max_delta_mm=raw_max*1000,clip_scale=clip_scale,ccd_alpha=contact.last_alpha,line_halvings=line_steps,energy_before=float(before),energy_after=float(energy(result)),max_accepted_mm=float(np.linalg.norm(result-X,axis=1).max()*1000),hard_error_mm=float(np.linalg.norm(result[pi]-effective_pt,axis=1).max()*1000) if len(pi) else 0.)
+        if not hasattr(contact,'solve_trace'):contact.solve_trace=[]
+        contact.solve_trace.append(contact.last_solve);contact.solve_trace=contact.solve_trace[-100:]
     return result
 
 
 class IPCContact:
     """IPC Toolkit barrier + continuous collision filtering, initialized uncut."""
-    def __init__(self,X,E,F,dhat=.001,stiffness=1e9):
+    def __init__(self,X,E,F,dhat=.001,stiffness=1e9,min_distance=0.):
         import ipctk
         # Parallel contact reductions perturb visibility/line-search decisions.
         # These small cloth meshes use deterministic single-thread reductions
@@ -168,17 +171,21 @@ class IPCContact:
         ipctk.set_num_threads(1)
         self.ipc=ipctk;self.broad_phase=ipctk.LBVH();self.ccd=ipctk.AdditiveCCD(max_iterations=100000);self.mesh=ipctk.CollisionMesh(np.asarray(X,float),np.asarray(E,np.int32),np.asarray(F,np.int32))
         if ipctk.has_intersections(self.mesh,np.asarray(X,float)):raise ValueError('IPC requires an intersection-free initial mesh')
+        self.min_distance=min_distance
+        if min_distance:
+            initial=ipctk.NormalCollisions();initial.build(self.mesh,X,dhat)
+            if initial.compute_minimum_distance(self.mesh,X)<min_distance**2:raise ValueError("Initial garment violates requested contact clearance")
         self.barrier=ipctk.BarrierPotential(dhat,stiffness);self.dhat=dhat;self.last_alpha=1.;self.last_contacts=0
     def derivatives(self,X):
-        cs=self.ipc.NormalCollisions();cs.build(self.mesh,X,self.dhat,broad_phase=self.broad_phase);self.last_contacts=len(cs)
+        cs=self.ipc.NormalCollisions();cs.build(self.mesh,X,self.dhat,dmin=self.min_distance,broad_phase=self.broad_phase);self.last_contacts=len(cs)
         g=self.barrier.gradient(cs,self.mesh,X);H=self.barrier.hessian(cs,self.mesh,X,self.ipc.PSDProjectionMethod.CLAMP)
         return g,H
     def filter(self,X,Y):
-        alpha=float(self.ipc.compute_collision_free_stepsize(self.mesh,X,Y,broad_phase=self.broad_phase,narrow_phase_ccd=self.ccd))
+        alpha=float(self.ipc.compute_collision_free_stepsize(self.mesh,X,Y,min_distance=self.min_distance,broad_phase=self.broad_phase,narrow_phase_ccd=self.ccd))
         self.last_alpha=alpha
         return X+min(1.,.9*alpha if alpha<1 else 1.)*(Y-X)
     def energy(self,X):
-        cs=self.ipc.NormalCollisions();cs.build(self.mesh,X,self.dhat,broad_phase=self.broad_phase)
+        cs=self.ipc.NormalCollisions();cs.build(self.mesh,X,self.dhat,dmin=self.min_distance,broad_phase=self.broad_phase)
         return float(self.barrier(cs,self.mesh,X))
     def intersects(self,X):return bool(self.ipc.has_intersections(self.mesh,X,broad_phase=self.broad_phase))
 
