@@ -77,8 +77,7 @@ for epp in a.episodes:
         from realpc.cloth_causal import CausalClothTracker, at_image
         from realpc.cloth_inputs import project
         options=json.load(open(a.cloth_causal_config)) if a.cloth_causal_config else {}
-        keys=('cell','arap','data','track','pin','wrists','dense','coverage','predict','plane','strain_limit','wrist_flow','template','grasp_layers','cot_weight','cot_anchor','motion_scale','robust_depth')
-        cloth=CausalClothTracker(**{k:options[k] for k in keys if k in options})
+        cloth=CausalClothTracker.from_config(options)
     for k, t in enumerate(ticks):
         frames = {}
         for c in ("top", "side"):

@@ -1,0 +1,5 @@
+# Additional dependencies for the clean two-panel cloth prototype.
+# Use the existing realpc environment (NumPy/SciPy/OpenCV/PyTorch/SAM2/CoTracker).
+triangle==20250106
+ipctk==1.6.1
+mujoco==3.17.0

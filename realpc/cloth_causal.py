@@ -37,8 +37,15 @@ def front_face_anchors(X,F,uv,K,T):
     ids=F[fi,np.argmax(bary,axis=1)];return ids,dd
 
 class CausalClothTracker:
-    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False):
-        self.idle_gate=idle_gate;self.max_stretch=max_stretch;self.ipc_contact=ipc_contact;self.strain_stiffness=strain_stiffness;self.joint_physics=joint_physics;self.bending=bending;self.gravity=gravity;self.point_grasp=point_grasp;self.length_slack=length_slack;self.paired_grasp=paired_grasp;self.paired_done=set();self.layer_visibility=layer_visibility;self.material_slack=material_slack;self.cell=cell;self.wa=arap;self.wd=data;self.wt=track;self.wp=pin;self.wrists=wrists
+    @classmethod
+    def from_config(cls, config):
+        """One configuration boundary shared by live/replay and conversion."""
+        import inspect
+        keys=inspect.signature(cls).parameters
+        return cls(**{k:v for k,v in config.items() if k in keys})
+
+    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False):
+        self.visible_grasp=visible_grasp;self.back_on_table=back_on_table;self.dynamics_gain=dynamics_gain;self.native_init_iters=native_init_iters;self.table_contact=table_contact;self.support_occlusion=support_occlusion;self.cot_rays_only=cot_rays_only;self.ray_observations=[];self.boundary_grasp=boundary_grasp;self.grasp_seed={};self.init_iters=init_iters;self.coverage_radius=coverage_radius;self.flat_rest=flat_rest;self.silhouette=silhouette;self.dynamics=dynamics;self.endpoint_projection=endpoint_projection;self.idle_gate=idle_gate;self.max_stretch=max_stretch;self.ipc_contact=ipc_contact;self.strain_stiffness=strain_stiffness;self.joint_physics=joint_physics;self.bending=bending;self.gravity=gravity;self.point_grasp=point_grasp;self.length_slack=length_slack;self.paired_grasp=paired_grasp;self.paired_done=set();self.layer_visibility=layer_visibility;self.material_slack=material_slack;self.cell=cell;self.wa=arap;self.wd=data;self.wt=track;self.wp=pin;self.wrists=wrists
         self.cm=None;self.tracks={};self.gray={};self.pins={};self.closed={};self.counter=0;self.tick=-1
         self.events=[];self.last_metrics={};self.dense=dense;self.prev_views=None;self.coverage=coverage;self.predict=predict;self.prev_X=None;self.prev_G={};self.plane=plane;self.strain_limit=strain_limit;self.wrist_flow=wrist_flow;self.template=template;self.grasp_layers=grasp_layers;self.cot_weight=cot_weight;self.cot_anchor=cot_anchor;self.cot={};self.cot_checks=[];self.motion_scale=motion_scale;self.robust_depth=robust_depth
 
@@ -48,7 +55,7 @@ class CausalClothTracker:
         return state
 
     def cot_constraints(self,f,v,X):
-        ids=[];targets=[];weights=[];self.cot_checks=[]
+        ids=[];targets=[];weights=[];self.cot_checks=[];self.ray_observations=[]
         assert int(f['max_observed_tick'])==self.tick and bool(f['zero_lookahead'])
         for c in CAMS:
             z=v[c];birth=int(f[c+'_cot_birth']);uv=f[c+'_cot_uv'];vis=f[c+'_cot_visible'];dep,_=at_image(z['D'],uv);Q=depth_points(uv,dep,z['K'],z['T'])
@@ -60,13 +67,21 @@ class CausalClothTracker:
                 self.cot[c]=dict(birth=birth,id=j,off=off,good=good,Q=Q.copy(),last_valid=np.zeros(len(Q),bool))
             s=self.cot[c];valid=vis&(dep>.08)&s['good'];held=np.arange(len(Q))%5==0;offset=np.einsum('nij,nj->ni',self.R[s['id']],s['off']);target=Q-offset
             fit=valid&~held
+            if self.support_occlusion:
+                _,predicted_depth=project(X[s['id']]+offset,z['K'],z['T'])
+                fit &= z['mobile'][s['id']] | (np.abs(predicted_depth-dep)<.015)
             if 'wrist' in c:
                 if not self.wrist_flow:fit[:]=False
                 else:
                     fit &= s['last_valid'];target=X[s['id']]+Q-s['Q']
             # Bounded recovery after occlusion, while preserving material IDs.
             delta=target-X[s['id']];length=np.linalg.norm(delta,axis=1);target=X[s['id']]+delta*np.minimum(1,.035*self.motion_scale/np.maximum(length,1e-8))[:,None]
-            ids.extend(s['id'][fit]);targets.extend(target[fit]);weights.extend(np.full(fit.sum(),self.cot_weight*(.5 if 'wrist' in c else 1.)))
+            if self.cot_rays_only:
+                rays=np.c_[(uv[:,0]-z['K'][0,2])/z['K'][0,0],(uv[:,1]-z['K'][1,2])/z['K'][1,1],np.ones(len(uv))]@z['T'][:3,:3].T
+                rays/=np.linalg.norm(rays,axis=1)[:,None]
+                self.ray_observations.append((s['id'][fit],s['off'][fit],np.broadcast_to(z['T'][:3,3],(fit.sum(),3)).copy(),rays[fit],np.full(fit.sum(),self.cot_weight*(.5 if 'wrist' in c else 1.))))
+            else:
+                ids.extend(s['id'][fit]);targets.extend(target[fit]);weights.extend(np.full(fit.sum(),self.cot_weight*(.5 if 'wrist' in c else 1.)))
             chk=valid&held;self.cot_checks.append((c,s['id'][chk],s['off'][chk],uv[chk],int(vis.sum()),int(valid.sum()),int(fit.sum()),self.tick-birth,len(uv)))
             s['Q']=Q.copy();s['last_valid']=valid.copy()
         return np.asarray(ids,int),np.asarray(targets).reshape(-1,3),np.asarray(weights)
@@ -88,6 +103,7 @@ class CausalClothTracker:
             nd,inside=at_image(new['D'],nxt[:,0]);valid=st[:,0].astype(bool)&sb[:,0].astype(bool)&inside&(nd>.08)&(np.linalg.norm(back[:,0]-p[:,0],axis=1)<1.)&(err[:,0]<25)
             Q0=depth_points(uv[ii],dep[ii],old['K'],old['T']);Q1=depth_points(nxt[:,0],nd,new['K'],new['T']);delta=Q1-Q0
             valid &= np.linalg.norm(delta,axis=1)<.065*self.motion_scale
+            if self.support_occlusion:valid &= new['mobile'][ii] | (np.abs(nd-z[ii])<.015)
             ids.extend(ii[valid]);targets.extend(Q1[valid]);weights.extend(np.full(valid.sum(),3.))
         return np.asarray(ids,int),np.asarray(targets).reshape(-1,3),np.asarray(weights)
 
@@ -95,6 +111,11 @@ class CausalClothTracker:
         views={};robot=cKDTree(f['robot'])
         for c in CAMS:
             D=f[c+'_depth'].copy();M=f[c+'_mask'].copy();K=f[c+'_K'];T=f[c+'_T'];rgb=f[c+'_rgb']
+            if self.template=='shirt':
+                uv_robot,z_robot=project(f['robot'],K,T);xy=np.rint(uv_robot).astype(int);h,w=D.shape
+                keep=(z_robot>.08)&(xy[:,0]>=0)&(xy[:,0]<w)&(xy[:,1]>=0)&(xy[:,1]<h)
+                R=np.zeros((h,w),np.uint8);R[xy[keep,1],xy[keep,0]]=1
+                R=cv2.dilate(R,np.ones((5,5),np.uint8));M &= R==0
             # SAM can include grippers, notably in wrist closeups. Reject only
             # measured points near the known robot and dark non-cloth pixels.
             P,uv=unproject(D,K,T,1,M)
@@ -111,7 +132,7 @@ class CausalClothTracker:
             Nx=depth_points(ux,dx,K,T)-P;Ny=depth_points(uy,dy,K,T)-P;N=np.cross(Nx,Ny);ln=np.linalg.norm(N,axis=1)
             valid=(dx>.08)&(dy>.08)&(np.linalg.norm(Nx,axis=1)<.03)&(np.linalg.norm(Ny,axis=1)<.03)&(ln>1e-9)
             N/=np.maximum(ln,1e-9)[:,None];N[~valid]=0
-            views[c]=dict(D=D,K=K,T=T,M=M,P=P,N=N,rgb=rgb,gray=cv2.cvtColor(rgb,cv2.COLOR_BGR2GRAY))
+            views[c]=dict(D=D,K=K,T=T,M=M,P=P,N=N,rgb=rgb,gray=cv2.cvtColor(rgb,cv2.COLOR_BGR2GRAY),raw_D=f[c+'_depth'],raw_M=f[c+'_mask'],robot_pixels=R if self.template=='shirt' else np.zeros_like(M))
         return views
 
     def initialize(self,v):
@@ -120,7 +141,7 @@ class CausalClothTracker:
         initial_X=None
         if self.template=='shirt':
             from .shirt_template import fit_current
-            V,F,initial_X,self.template_info=fit_current(v,self.cell)
+            V,F,initial_X,self.template_info=fit_current(v,self.cell,flat_rest=self.flat_rest,table_plane=getattr(self,'table_plane',None),back_on_table=self.back_on_table)
         elif self.template=='top':
             # A single observed cloth skin avoids TSDF welding nearby initial
             # wrinkle layers. Hidden cloth is still an approximation, not GT.
@@ -137,7 +158,7 @@ class CausalClothTracker:
         # Lock the fitted garment metric once at initialization. The clean topology
         # is retained; online fitting never resets rest lengths to hide stretch.
         if initial_X is not None:
-            V=initial_X.copy()
+            if not self.flat_rest:V=initial_X.copy()
             # Explicit garment-size sensitivity; fixed before the sequence.
             angle=self.template_info['fit_parameters'][0]
             axis=np.array([np.cos(angle),np.sin(angle),0.])
@@ -165,12 +186,13 @@ class CausalClothTracker:
             L=sp.coo_matrix((np.concatenate(vals),(np.concatenate(rows),np.concatenate(cols))),shape=(len(V),len(V))).tocsr()
             edges=np.sort(np.concatenate([F[:,[0,1]],F[:,[1,2]],F[:,[0,2]]]),axis=1);ue,ct=np.unique(edges,axis=0,return_counts=True)
             boundary=np.unique(ue[ct==1]);mask=np.ones(len(V));mask[boundary]=0
+            pair=np.asarray(self.template_info['panel_pair']);sewn=pair==np.arange(len(V));near_seam=np.unique(ue[sewn[ue].any(1)]);mask[near_seam]=0
             norm=np.asarray(abs(L).sum(1)).ravel();self.bend_op=sp.diags(mask/np.maximum(norm,1e-8))@L
             self.bend_matrix=self.bend_op.T@self.bend_op
 
         E=self.cm.E;el=np.linalg.norm(self.e0,axis=1)
         self.graph=sp.coo_matrix((np.r_[el,el],(np.r_[E[:,0],E[:,1]],np.r_[E[:,1],E[:,0]])),shape=(len(V),len(V))).tocsr()
-        self.R=np.tile(np.eye(3),(len(V),1,1))
+        self.R=self.rotations(self.cm.X)
         # Independent-edge batches allow fast sequential position-based strain
         # projection without updating a vertex twice within the same batch.
         used=[set() for _ in range(len(V))];colors=[]
@@ -221,21 +243,34 @@ class CausalClothTracker:
         U,_,Vh=np.linalg.svd(cov);R=Vh.transpose(0,2,1)@U.transpose(0,2,1)
         neg=np.linalg.det(R)<0;Vh[neg,-1]*=-1;return Vh.transpose(0,2,1)@U.transpose(0,2,1)
 
-    def update_pins(self,f,X):
+    def update_pins(self,f,X,views=None):
         pi=[];pt=[]
+        if not hasattr(self,'grasp_seed'):self.grasp_seed={}
         for a in ('left','right'):
             close=float(f['q_'+a][-1])<.25
             if not close:
                 if a in self.pins:self.events.append(dict(t=self.tick,arm=a,event='release'))
-                self.pins.pop(a,None);self.closed[a]=False
+                self.pins.pop(a,None);self.grasp_seed.pop(a,None);self.closed[a]=False
                 if hasattr(self,'paired_done'):self.paired_done.discard(a)
             elif not self.closed.get(a,False):
                 self.closed[a]=True;tips=f['tips_'+a]
                 if self.template=='shirt':
                     G=f['G_'+a];local_tips=(tips-G[:3,3])@G[:3,:3];distal=local_tips[:,2]>.12
                     if distal.any():tips=tips[distal]
-                d=cKDTree(tips).query(X)[0];i=int(d.argmin())
+                d=cKDTree(tips).query(X)[0]
+                if getattr(self,'visible_grasp',False) and views is not None:
+                    from .cloth_physics import visible_vertices
+                    seen=np.zeros(len(X),bool)
+                    for camera in CAMS[:2]:
+                        z=views[camera];uv,depth=project(X,z['K'],z['T']);dd,inside=at_image(z['D'],uv)
+                        seen |= inside&(dd>.08)&(np.abs(depth-dd)<.02)&visible_vertices(X,self.cm.F,z['K'],z['T'],z['D'].shape)
+                    if np.any(seen&(d<.035)):d=np.where(seen,d,np.inf)
+                i=int(d.argmin())
+                if self.template=='shirt' and self.boundary_grasp:
+                    F=self.cm.F;edges=np.sort(np.vstack([F[:,[0,1]],F[:,[1,2]],F[:,[0,2]]]),axis=1);edges,count=np.unique(edges,axis=0,return_counts=True);boundary=np.unique(edges[count==1]);bi=int(boundary[d[boundary].argmin()])
+                    if d[bi]<.030:i=bi
                 if d[i]<.035:
+                    self.grasp_seed[a]=i
                     if self.grasp_layers:
                         # A closed pinch can capture multiple folded material
                         # layers. Freeze their union ONCE, never reselect later.
@@ -244,7 +279,7 @@ class CausalClothTracker:
                     else:
                         dist=dijkstra(self.graph,directed=False,indices=i,limit=.018);idx=np.flatnonzero(dist<.018)
                     G=f['G_'+a];local=(X[idx]-G[:3,3])@G[:3,:3];self.pins[a]=(idx,local)
-                    self.events.append(dict(t=self.tick,arm=a,event='acquire',vertices=idx.tolist(),distance_mm=float(d[i]*1000)))
+                    self.events.append(dict(t=self.tick,arm=a,event='acquire',seed=i,boundary_prior=bool(self.boundary_grasp),vertices=idx.tolist(),distance_mm=float(d[i]*1000)))
                 else:self.events.append(dict(t=self.tick,arm=a,event='miss',distance_mm=float(d[i]*1000)))
             if a in self.pins and self.template=='shirt' and getattr(self,'paired_grasp',False):
                 if not hasattr(self,'paired_done'):self.paired_done=set()
@@ -269,6 +304,9 @@ class CausalClothTracker:
                 back,sb,_=cv2.calcOpticalFlowPyrLK(z['gray'],self.gray[c],nxt,None,winSize=(21,21),maxLevel=4)
                 uv=nxt[:,0];dep,inside=at_image(z['D'],uv);valid=st[:,0].astype(bool)&sb[:,0].astype(bool)&inside&(dep>.08)&(np.linalg.norm(back[:,0]-p[:,0],axis=1)<.8)&(err[:,0]<22)
                 Q=depth_points(uv,dep,z['K'],z['T']);valid &= np.linalg.norm(Q-prev['Q'],axis=1)<.065*self.motion_scale
+                if self.support_occlusion:
+                    pp=X[prev['id']]+np.einsum('nij,nj->ni',self.R[prev['id']],prev['off']);_,predicted_depth=project(pp,z['K'],z['T'])
+                    valid &= z['mobile'][prev['id']] | (np.abs(predicted_depth-dep)<.015)
                 for key in prev:now.append((key,prev[key][valid]))
                 now=dict(now);now['uv']=uv[valid];now['Q']=Q[valid];now['age']+=1
                 offset=np.einsum('nij,nj->ni',self.R[now['id']],now['off']);target=now['Q']-offset
@@ -297,19 +335,33 @@ class CausalClothTracker:
     def step(self,t,frame,iters=5):
         assert t==self.tick+1, 'Frames must be supplied once in causal order'
         self.tick=t;v=self.views(frame)
-        if self.ipc_contact and t==0:iters=max(iters,36)
+        if self.table_contact and not hasattr(self,'table_plane'):
+            from .cloth_seed import depth_seed
+            _,self.table_plane=depth_seed(frame)
+        if self.ipc_contact and t==0:iters=max(iters,self.init_iters)
+        if self.dynamics and self.flat_rest and t==0:iters=max(iters,self.init_iters)
         if self.cm is None:self.initialize(v)
+        if self.table_contact:self.template_info['table_plane_z_axbyc']=self.table_plane.tolist()
         X=self.cm.X.copy();Xp=X.copy();n=len(X);E=self.cm.E
         if self.ipc_contact and not hasattr(self,'ipc_state'):
             from .cloth_physics import IPCContact
             self.ipc_state=IPCContact(X,E,self.cm.F)
-        pi,pt=self.update_pins(frame,X)
+        pi,pt=self.update_pins(frame,X,v)
         hi,ht=pi,pt
         if self.template=='shirt' and self.point_grasp and len(pi):
             hard=[]
             for arm,(ids,_) in self.pins.items():
-                hard.append(ids[np.argmin(np.linalg.norm(X[ids]-X[ids].mean(0),axis=1))])
+                center=self.grasp_seed.get(arm,int(ids[np.argmin(np.linalg.norm(self.cm.V0[ids]-self.cm.V0[ids].mean(0),axis=1))]));hard.append(center)
+                if self.paired_grasp:
+                    pair=np.asarray(self.template_info.get('panel_pair',np.arange(len(X))))
+                    if pair[center]!=center and pair[center] in ids:hard.append(pair[center])
             choose=np.array([np.flatnonzero(pi==i)[0] for i in hard]);hi,ht=pi[choose],pt[choose]
+        if self.dynamics and self.flat_rest and t==0 and not self.joint_physics:
+            hi=np.asarray(self.template_info['initial_landmark_ids'],int);ht=X[hi].copy()
+        mobile=np.full(n,t==0,bool)
+        if self.prev_X is not None:mobile |= np.linalg.norm(Xp-self.prev_X,axis=1)>.003
+        if len(pi):mobile |= dijkstra(self.graph,directed=False,indices=pi,limit=.20).min(0)<.20
+        for z in v.values():z['mobile']=mobile
         ti,tt,tw,checks,counts=self.track_features(v,X)
         if self.dense:
             vi,vt,vw=self.vertex_flow(v,X);ti=np.r_[ti,vi];tt=np.vstack([tt,vt]);tw=np.r_[tw,vw]
@@ -320,7 +372,7 @@ class CausalClothTracker:
             tips=np.vstack([frame['tips_left'],frame['tips_right']]);near=cKDTree(X).query(tips)[0].min()
             residual=float(np.median(np.linalg.norm(tt-X[ti],axis=1)))
             velocity=float(np.median(np.linalg.norm(Xp-self.prev_X,axis=1))) if self.prev_X is not None else 0.
-            idle=near>.03 and residual<.004 and velocity<.002
+            idle=bool(residual<.004 and velocity<.002)
         if idle:iters=0
         if not idle and self.predict and self.prev_X is not None:
             velocity=.8*(Xp-self.prev_X);length=np.linalg.norm(velocity,axis=1);velocity*=np.minimum(1,.025*self.motion_scale/np.maximum(length,1e-8))[:,None]
@@ -336,13 +388,16 @@ class CausalClothTracker:
             blend=np.minimum(mass,1);velocity=(1-blend[:,None])*velocity+contact
             X=Xp+velocity
         if self.template=='shirt' and not idle:X[:,2]-=self.gravity
-        if self.max_stretch:
+        if self.max_stretch and not self.ipc_contact:
             from .cloth_physics import extension_filter
             X,self.extension_alpha=extension_filter(Xp,X,self.cm.V0,E,self.max_stretch)
-        if self.ipc_contact:X=self.ipc_state.filter(Xp,X)
         prior=X.copy()
+        # An inertial prediction is an objective target, not a feasible mesh.
+        # Start Newton at the last accepted mesh; all motion passes line search.
+        if self.ipc_contact or self.dynamics:X=Xp.copy()
         cams=CAMS if self.wrists else CAMS[:2];trees={c:cKDTree(v[c]['P']) for c in cams if len(v[c]['P'])}
-        for iteration in range(iters):
+        total_iters=iters+(self.native_init_iters if self.dynamics and self.joint_physics and t==0 else 0)
+        for iteration in range(total_iters):
             R=self.rotations(X);edge=np.einsum('nij,nj->ni',.5*(R[E[:,0]]+R[E[:,1]]),self.e0);b=np.zeros((n,3));np.add.at(b,E[:,0],edge);np.add.at(b,E[:,1],-edge)
             w=np.full(n,.15);rhs=.15*prior+self.wa*b
             for c,tree in trees.items():
@@ -358,18 +413,30 @@ class CausalClothTracker:
                 if self.plane:
                     normal=z['N'][j[ok]];delta=target-X[ok];target=X[ok]+.1*delta+.9*np.sum(normal*delta,axis=1)[:,None]*normal
                 w[ok]+=ww;rhs[ok]+=ww*target
+                if self.silhouette:
+                    raw,inside_raw=at_image(z['raw_D'],uv);mask,_=at_image(z['raw_M'],uv);robot_pixel,_=at_image(z['robot_pixels'],uv)
+                    # Outside the observed silhouette is negative evidence only
+                    # when the projected surface is not occluded by the robot.
+                    outside=inside_raw&(raw>.08)&(~mask.astype(bool))&(robot_pixel==0)&(depth<raw+.008)&mesh_visible&(d<.08)
+                    w[outside]+=5*self.wd;rhs[outside]+=5*self.wd*z['P'][j[outside]]
                 if self.coverage:
                     # Symmetric surface fit: a mesh can sit on the cloth while
                     # leaving large measured regions uncovered. Normalize by
                     # vertex occupancy, rather than letting dense views win.
-                    eligible=inside&(depth>.08)&((dd<.08)|(depth<dd+.012))&mesh_visible
+                    eligible=inside&(depth>.08)&mesh_visible
+                    if self.support_occlusion:eligible &= (dd<.08)|(depth<dd+.012)|mobile
+                    elif not self.layer_visibility:eligible &= (dd<.08)|(depth<dd+.012)
                     jj=np.flatnonzero(eligible)
                     if len(jj):
-                        ds,ii=cKDTree(X[jj]).query(z['P']);good=ds<.045;ii=jj[ii[good]];Y=z['P'][good]
+                        ds,ii=cKDTree(X[jj]).query(z['P']);good=ds<self.coverage_radius;ii=jj[ii[good]];Y=z['P'][good]
                         sums=np.zeros((n,3));np.add.at(sums,ii,Y);num=np.bincount(ii,minlength=n);hit=num>0
                         w[hit]+=self.coverage;rhs[hit]+=self.coverage*sums[hit]/num[hit,None]
             if self.ipc_contact:
-                under=X[:,2]<self.template_info['floor_z'];ground=X[under].copy();ground[:,2]=self.template_info['floor_z'];w[under]+=1000;rhs[under]+=1000*ground
+                if self.table_contact:
+                    normal=np.r_[-self.table_plane[:2],1.];height=X@normal-self.table_plane[2]-.0002;under=height<0;ground=X[under]-height[under,None]*normal/(normal@normal)
+                else:
+                    under=X[:,2]<self.template_info['floor_z'];ground=X[under].copy();ground[:,2]=self.template_info['floor_z']
+                w[under]+=1000;rhs[under]+=1000*ground
             if len(ti):np.add.at(w,ti,tw);np.add.at(rhs,ti,tw[:,None]*tt)
             if len(pi):np.add.at(w,pi,self.wp);np.add.at(rhs,pi,self.wp*pt)
             A=self.wa*self.cm.L+sp.diags(w)
@@ -378,21 +445,43 @@ class CausalClothTracker:
                     # Checkpoint experiment: uniform interior curvature fallback.
                     B=sp.diags(1/np.maximum(self.cm.L.diagonal(),1))@self.cm.L;self.bend_matrix=B.T@B
                 A=A+self.bending*self.bend_matrix
-            if self.template=='shirt' and self.joint_physics:
+            if self.template=='shirt' and self.dynamics and (t>0 or not self.joint_physics or iteration>=iters):
+                from .cloth_dynamics import ClothDynamics
+                # At initialization, joint fitting has already advanced X.
+                # Starting dynamics from Xp discards that fitted garment.
+                if not hasattr(self,'dynamics_state'):self.dynamics_state=ClothDynamics(self.cm.V0,self.cm.F,X,self.template_info['floor_z'],table_plane=getattr(self,'table_plane',None))
+                if iteration==(iters if t==0 and self.joint_physics else 0):dynamic_start=np.array([self.dynamics_state.previous_pins.get(int(i),Xp[i]) for i in hi]).reshape(-1,3)
+                target=ht if t==0 else dynamic_start+(ht-dynamic_start)*(iteration+1)/max(iters,1)
+                X=self.dynamics_state.advance(A,rhs,hi,target,duration=1/30 if t==0 else 1/30/max(iters,1),gain=self.dynamics_gain)
+            elif self.template=='shirt' and self.joint_physics:
                 from .cloth_physics import joint_step
-                X=joint_step(X,self.cm.V0,E,A,rhs,hi,ht,self.strain_limit,self.strain_stiffness,self.ipc_state if self.ipc_contact else None,self.max_stretch)
+                rays=None
+                if self.cot_rays_only and self.ray_observations:
+                    ri,off,centers,dirs,rw=[np.concatenate([obs[j] for obs in self.ray_observations]) for j in range(5)]
+                    rays=(ri,centers-np.einsum('nij,nj->ni',R[ri],off),dirs,rw)
+                X=joint_step(X,self.cm.V0,E,A,rhs,hi,ht,self.strain_limit,self.strain_stiffness,self.ipc_state if self.ipc_contact else None,self.max_stretch,self.endpoint_projection,rays=rays,table_plane=getattr(self,'table_plane',None))
             else:X=sla.spsolve(A.tocsc(),rhs)
-            if self.strain_limit and not self.joint_physics:X=self.project_strain(X,hi,ht)
-            if self.template=='shirt' and not self.ipc_contact:
+            if self.strain_limit and not self.joint_physics and not self.dynamics:X=self.project_strain(X,hi,ht)
+            if self.template=='shirt' and not self.ipc_contact and not self.dynamics:
                 from .cloth_physics import self_contact
                 X,self.contact_count=self_contact(X,Xp,self.cm.V0,self.cm.F,hi)
                 X[:,2]=np.maximum(X[:,2],self.template_info['floor_z'])
                 if len(hi):X[hi]=ht
-        if self.template=='shirt' and self.strain_limit and not self.joint_physics:X=self.project_strain(X,hi,ht)
+        if self.template=='shirt' and self.strain_limit and not self.joint_physics and not self.dynamics:X=self.project_strain(X,hi,ht)
         if self.layer_visibility:
             from .cloth_physics import visible_vertices
             for c in CAMS[:2]:v[c]['mesh_visible']=visible_vertices(X,self.cm.F,v[c]['K'],v[c]['T'],v[c]['D'].shape)
-        self.cm.X=X;self.R=self.rotations(X);metrics=self.measure(v,checks,counts);metrics['idle_gate']=idle;metrics['pins']=len(pi);metrics['ipc_intersections']=self.ipc_state.intersects(X) if self.ipc_contact else None;metrics['ipc_contacts']=self.ipc_state.last_contacts if self.ipc_contact else None;metrics['ipc_alpha']=self.ipc_state.last_alpha if self.ipc_contact else None;metrics['grasp_error_mm']=float(np.max(np.linalg.norm(X[pi]-pt,axis=1))*1000) if len(pi) else 0.;self.prev_views=v
+        if self.dynamics and self.flat_rest and t==0 and hasattr(self,'dynamics_state'):self.dynamics_state.data.qvel[:]=0
+        self.cm.X=X;self.R=self.rotations(X)
+        if t==0:
+            # Initialize persistent material correspondences AFTER the garment
+            # fit. Pre-fit offsets otherwise cause drift on a stationary shirt.
+            self.tracks={};self.gray={};self.cot={};self.counter=0
+            _,_,_,checks,counts=self.track_features(v,X)
+            if self.cot_weight:self.cot_constraints(frame,v,X)
+        metrics=self.measure(v,checks,counts)
+        if self.table_contact:metrics['min_table_clearance_mm']=float((X@np.r_[-self.table_plane[:2],1.]-self.table_plane[2]).min()*1000)
+        metrics['idle_gate']=idle;metrics['pins']=len(pi);metrics['ipc_intersections']=self.ipc_state.intersects(X) if self.ipc_contact else None;metrics['ipc_contacts']=self.ipc_state.last_contacts if self.ipc_contact else None;metrics['ipc_alpha']=self.ipc_state.last_alpha if self.ipc_contact else None;metrics['grasp_error_mm']=float(np.max(np.linalg.norm(X[pi]-pt,axis=1))*1000) if len(pi) else 0.;metrics['hard_grasp_error_mm']=float(np.max(np.linalg.norm(X[hi]-ht,axis=1))*1000) if len(hi) else 0.;self.prev_views=v
         if self.dense:metrics['vertex_flow_constraints']=len(vi)
         self.prev_X=Xp;self.prev_G={a:frame['G_'+a].copy() for a in ('left','right')};self.last_metrics=metrics;return X.copy(),metrics,v
 

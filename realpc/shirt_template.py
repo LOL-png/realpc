@@ -10,9 +10,9 @@ from scipy.ndimage import gaussian_filter
 
 def outline():
     # Clockwise: hem, side seam, underarm, cuff, shoulder, neck, mirrored.
-    return np.array([[-.28,-.48],[.28,-.48],[.27,.00],[.49,-.06],[.62,.16],
+    return np.array([[-.38,-.48],[.38,-.48],[.37,.00],[.49,-.06],[.62,.16],
                      [.34,.38],[.13,.45],[.10,.37],[0,.34],[-.10,.37],[-.13,.45],
-                     [-.34,.38],[-.62,.16],[-.49,-.06],[-.27,.00]])
+                     [-.34,.38],[-.62,.16],[-.49,-.06],[-.37,.00]])
 
 
 def make_panels(poly,cell=.012,thickness=.002):
@@ -48,7 +48,7 @@ def make_panels(poly,cell=.012,thickness=.002):
 
 
 
-def fit_current(views,cell=.012):
+def fit_current(views,cell=.012,flat_rest=False,table_plane=None,back_on_table=False):
     """Optimize a low-dimensional flat pattern, then current-frame drape heights.
     Two cameras contribute geometry; top footprint rejects distant side clutter.
     """
@@ -79,17 +79,41 @@ def fit_current(views,cell=.012):
         q=q.reshape(-1,2);samples=np.vstack([a+(b-a)*np.linspace(0,1,12)[:,None] for a,b in zip(q,np.roll(q,-1,axis=0))])
         # Preserve garment structure while allowing asymmetric initial placement.
         return np.r_[target.query(samples)[0],cKDTree(samples).query(contour[::3])[0],.6*(q-original).ravel(),.3*((q-np.roll(q,1,axis=0))-(original-np.roll(original,1,axis=0))).ravel()]
-    q=least_squares(outline_res,poly.ravel(),bounds=((poly-.05).ravel(),(poly+.05).ravel()),max_nfev=35,loss='soft_l1',f_scale=.01)
+    bounds=np.full_like(poly,.03);bounds[6:11]=.015
+    q=least_squares(outline_res,poly.ravel(),bounds=((poly-bounds).ravel(),(poly+bounds).ravel()),max_nfev=35,loss='soft_l1',f_scale=.01)
     poly=q.x.reshape(-1,2)
-    V,F,n,pair=make_panels(poly,cell)
+    if flat_rest:
+        # Estimate scale from the complete sleeve span and garment length, not
+        # from the compressed torso silhouette. Keep a regular flat cut pattern.
+        from scipy.interpolate import RBFInterpolator
+        angle=fit.x[0];R=np.array([[np.cos(angle),-np.sin(angle)],[np.sin(angle),np.cos(angle)]])
+        local=(xy-center)@R;extent=np.percentile(local,99,axis=0)-np.percentile(local,1,axis=0)
+        sx,sy=extent/np.ptp(base,axis=0)
+        rest_poly=base*np.array([sx,sy])@R.T+center
+        V,F,n,pair=make_panels(rest_poly,cell)
+        warp=RBFInterpolator(rest_poly,poly,kernel='thin_plate_spline',smoothing=1e-7)
+        fit_xy=warp(V[:n,:2])
+    else:
+        V,F,n,pair=make_panels(poly,cell);fit_xy=V[:n,:2]
     # Smooth, bounded height regression; retain the clean pattern as rest metric.
-    distances,js=cKDTree(P[:,:2]).query(V[:n,:2],k=16);w=np.exp(-(distances/.025)**2)
+    distances,js=cKDTree(P[:,:2]).query(fit_xy,k=16);w=np.exp(-(distances/.025)**2)
     heights=(w*P[js,2]).sum(1)/np.maximum(w.sum(1),1e-12)
     floor=float(np.percentile(top[:,2],2)-.003)
-    heights=np.maximum(heights,floor+.003)
-    X=V.copy();X[:n,2]=heights
+    support=floor if table_plane is None else np.c_[fit_xy,np.ones(len(fit_xy))]@table_plane
+    heights=np.maximum(heights,support+.003)
+    X=V.copy();X[:n,:2]=fit_xy;X[:n,2]=heights
     for i in range(n):
         if pair[i]==i:X[i,2]=heights[i]-.001
-        else:X[pair[i],2]=heights[i]-.002
+        else:X[pair[i]]=np.r_[fit_xy[i],heights[i]-.002]
+    if back_on_table:
+        # The hidden panel is not another observed copy of the front wrinkles.
+        # Start it supported by the table, smoothly meeting shared side seams.
+        sewn=np.flatnonzero(pair[:n]==np.arange(n))
+        distance,nearest=cKDTree(fit_xy[sewn]).query(fit_xy)
+        support=np.broadcast_to(support,(n,))
+        boundary_lift=np.maximum(X[sewn[nearest],2]-support[sewn[nearest]]-.001,0.)
+        back_height=np.minimum(support+.001+boundary_lift*np.exp(-distance/.02),heights-.002)
+        free=np.flatnonzero(pair[:n]!=np.arange(n))
+        X[pair[free],2]=back_height[free]
     V[:,2]+=floor+.002
-    return V,F,X,{'fit_parameters':fit.x.tolist(),'outline_rms_mm':float(np.sqrt(np.mean(fun(fit.x)**2))*1000),'panel_vertices':n,'panel_pair':pair.tolist(),'seams':'shared vertices','floor_z':floor,'current_frame_only':True,'openings':['neck','left cuff','right cuff','hem']}
+    return V,F,X,{'flat_rest':flat_rest,'back_on_table':back_on_table,'fit_parameters':fit.x.tolist(),'outline_rms_mm':float(np.sqrt(np.mean(fun(fit.x)**2))*1000),'panel_vertices':n,'panel_pair':pair.tolist(),'fit_outline':poly.tolist(),'initial_landmark_ids':cKDTree(X[:n,:2]).query(poly[[0,1,3,4,6,10,12,13]])[1].tolist(),'seams':'shared vertices','floor_z':floor,'current_frame_only':True,'openings':['neck','left cuff','right cuff','hem']}
