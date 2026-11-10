@@ -47,6 +47,7 @@ def main():
     files = [f for f in sorted(dataset.glob('*/episode_*.npz'))
              if f.stem.split('_')[-1].isdigit()]
     totals, episodes, task_images, cloth_physics, depth_totals = {}, {}, {}, {}, {}
+    pose_coverage, episode_coverage = {}, {}
     for path in files:
         task, episode = path.parent.name, path.stem
         key = task + '/' + episode
@@ -59,6 +60,18 @@ def main():
         picks = np.unique(np.linspace(0, count - 1, 5).astype(int)).tolist()
         video = a.example_videos and episode == 'episode_0000'
         if task != 'greycloth':
+            episode_coverage[key] = {}
+            for index, object_name in enumerate(data['obj_names']):
+                name = str(object_name)
+                defined = int(data['obj_valid'][index].sum())
+                episode_coverage[key][name] = dict(frames=count, pose_defined_frames=defined)
+                entry = pose_coverage.setdefault(name, dict(episodes=0, frames=0, pose_defined_frames=0,
+                                                           episodes_with_missing_pose=[]))
+                entry['episodes'] += 1
+                entry['frames'] += count
+                entry['pose_defined_frames'] += defined
+                if defined < count:
+                    entry['episodes_with_missing_pose'].append(key)
             args = ['scripts/audit_v3.py', '--converted', str(path), '--scene-seg-dir', str(dataset),
                     '--reference-name', 'stream', '--assets', str(ROOT / 'assets/objects_v3'),
                     '--depth-check', '--every', str(1 if video else a.every), '--out', str(dest),
@@ -158,10 +171,17 @@ def main():
             median_mm=float(np.median([r['median_mm'] for r in good])) if good else None)
     report = dict(aggregate=aggregate, episodes=episodes, cloth_physics=cloth_physics, every=a.every,
         depth_agreement=depth_summary,
+        pose_availability=pose_coverage, episode_pose_availability=episode_coverage,
         sampling='Rigid: requested stride plus five spread-out frames; example videos audit every frame. Cloth: every frame.',
         note='Stream consistency is not independent accuracy. Independent labels exist only for selected episodes. Cloth camera audit uses every-frame causal SAM reference masks; folds remain approximate.')
     (output / 'alignment_summary.json').write_text(json.dumps(report, indent=2))
     lines = ['# Per-object alignment', '', 'Sampled visible silhouette IoU>=0.5; independent and stream scores are separate.', '']
+    lines += ['## Pose availability', '',
+        'A defined pose is not an alignment pass. Missing poses are counted here even when no rendered silhouette exists.', '',
+        '| Object | Episodes | Defined / total frames | Episodes with missing poses |', '|---|---:|---:|---:|']
+    for name, values in sorted(pose_coverage.items()):
+        lines.append(f"| {name} | {values['episodes']} | {values['pose_defined_frames']}/{values['frames']} | {len(values['episodes_with_missing_pose'])} |")
+    lines.append('')
     for mode, rows in aggregate.items():
         lines += ['## ' + mode, '', '| Object/view | Episodes | Frames | Frame pass | Mean episode pass | Median IoU |', '|---|---:|---:|---:|---:|---:|']
         for name, row in sorted(rows.items()):

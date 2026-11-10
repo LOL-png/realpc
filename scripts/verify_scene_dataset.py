@@ -119,6 +119,7 @@ def main():
                                         for key, value in report['episodes'].items()]
         manifest['alignment_summary'] = report['aggregate']
         manifest['depth_agreement'] = report.get('depth_agreement', {})
+        manifest['pose_availability'] = report.get('pose_availability', {})
         manifest['alignment_note'] = report['note']
     temp = root / 'manifest.tmp.json'
     temp.write_text(json.dumps(manifest, indent=2))
