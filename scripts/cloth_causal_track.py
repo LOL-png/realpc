@@ -42,7 +42,9 @@ def main():
                 time.sleep(1);waited+=1
                 if waited>90:raise RuntimeError('CoTracker packet missing: '+str(cp))
             with np.load(cp) as z:frame.update({k:z[k] for k in z.files})
-        X,m,v=tr.step(t,frame,iters=a.iters);XX.append(X.astype(np.float32));metrics.append(m)
+        # Preserve CCD's accepted geometry: float32 rounding can turn a tiny
+        # positive self-contact clearance into a crossing in exported meshes.
+        X,m,v=tr.step(t,frame,iters=a.iters);XX.append(X.copy());metrics.append(m)
         (out/'progress.json').write_text(json.dumps(dict(t=t,elapsed_s=time.time()-start,grasp_mm=m['grasp_error_mm'],mesh_mm=m['mesh_to_surface_med_mm'])))
         rows=[]
         for c in ['top','side']:
