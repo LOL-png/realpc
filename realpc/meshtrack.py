@@ -184,7 +184,9 @@ class MeshTracker:
     def step(self, t, views: list, q: dict, T_world_base: dict, aux_views=None):
         """views: list of CamView for this tick (cameras whose content time ~ t). Returns {name: T_world_obj}."""
         self.tick = t
-        if self.cfg["depth_mesh"]:self.cfg["sil_refine"]=any(v.labels is not None for v in views)
+        if self.cfg["depth_mesh"]:
+            every=int(os.environ.get("REALPC_DEPTH_CONTOUR_EVERY","4"))
+            self.cfg["sil_refine"]=any(v.labels is not None for v in views) or (every>0 and t%every==0)
         rob = self.robot(q, T_world_base)
         # robot z-buffers per view (occlusion)
         robot_z = []
@@ -325,7 +327,7 @@ class MeshTracker:
             depth_observation=self.cfg["depth_mesh"] and all(getattr(v,"depth_generated",False) for v in views)
             depth_distance=o.tree.query((M-st.T[:3,3])@st.T[:3,:3])[0] if depth_observation and len(M) else np.zeros(0)
             stationary_fit=len(depth_distance)>=self.cfg["mask_min_pts"] and np.median(depth_distance)<.004 and np.percentile(depth_distance,80)<.008
-            if depth_observation and st.held is None and st.carrier is None and not carriers and (stationary_fit or (not near_robot and len(M)<self.cfg["mask_min_pts"])):
+            if depth_observation and not self.cfg["sil_refine"] and st.held is None and st.carrier is None and not carriers and (stationary_fit or (not near_robot and len(M)<self.cfg["mask_min_pts"])):
                 # A resting object should not chase depth noise or slide along an
                 # underconstrained plane. Current ray evidence still detects loss.
                 if len(M):

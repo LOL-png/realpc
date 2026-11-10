@@ -57,6 +57,8 @@ def associate_depth(tracker, views, robot_z, object_z):
             win=score<best.ravel()[idx]
             best.ravel()[idx[win]]=score[win];labels.ravel()[idx[win]]=oi
         labels[robot]=254
+        # Unknown depth is not background evidence for contour fitting.
+        labels[~((D>.1)&np.isfinite(D))]=254
         v.labels=labels
         v.depth_generated=True
         # Keep the exact returns that passed robot/table/surface rejection.
