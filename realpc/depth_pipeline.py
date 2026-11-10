@@ -4,9 +4,11 @@ import numpy as np
 from .meshtrack import CamView
 
 class DepthMeshPipeline:
-    def __init__(self,converter,sam_checkpoint):
+    def __init__(self,converter,sam_checkpoint,sam_interval=None):
         os.environ['REALPC_DEPTH_MESH']='1'
         self.converter=converter;converter.seg={}
+        self.sam_interval=int(os.environ.get('REALPC_SAM_INTERVAL','0')) if sam_interval is None else int(sam_interval)
+        if self.sam_interval<0:raise ValueError('SAM interval must be nonnegative; zero means events only')
         self.checkpoint=sam_checkpoint;self.model=None;self.segmenter=None;self.events=[]
         self.bad={};self.pending=[];self.last_recovery={};self.timings=[];self.last_health={}
 
@@ -42,14 +44,15 @@ class DepthMeshPipeline:
                     distance=c.trk.objs[n].tree.query((M-st.T[:3,3])@st.T[:3,:3])[0]
                     if np.median(distance)>.035 and rob[st.held]['grip']>st.grip_at_grasp+.03:
                         st.held=None;st.T_grip_obj=None
-        self.events.append({'tick':int(t),'reason':'initialize' if initial else 'reacquire','objects':[o.name for o in c.objs] if initial else list(self.pending),'trigger':{} if initial else {n:self.last_health.get(n,{}) for n in self.pending},'reprompts':prompts,'camera_calls':len(labels),'seconds':time.perf_counter()-start})
+        self.events.append({'tick':int(t),'reason':'initialize' if initial else ('reacquire' if self.pending else 'periodic'),'objects':[o.name for o in c.objs] if initial or not self.pending else list(self.pending),'trigger':{} if initial else {n:self.last_health.get(n,{}) for n in self.pending},'reprompts':prompts,'camera_calls':len(labels),'seconds':time.perf_counter()-start})
         return labels
 
     def step(self,t,frames,q=None):
         start=time.perf_counter();c=self.converter
         if q is None:q={a:c.cal.q_at(c.ep,a,c.cal.robot_tick(c.ep,'top',t)) for a in ('left','right')}
         initial=c.trk is None
-        labels=self._sam(t,frames,q,initial) if initial or self.pending else None
+        periodic=bool(self.sam_interval and self.events and t-self.events[-1]["tick"]>=self.sam_interval)
+        labels=self._sam(t,frames,q,initial) if initial or self.pending or periodic else None
         out=c.step(t,frames,labels=labels,q=q)
         self.pending=[]
         for n,d in getattr(c.trk,'depth_diagnostics',{}).items():
@@ -67,4 +70,4 @@ class DepthMeshPipeline:
 
     def summary(self):
         x=np.asarray(self.timings)
-        return {'frames':len(x),'step_seconds':float(x.sum()),'step_fps':float(len(x)/x.sum()) if len(x) else 0,'steady_median_ms':float(np.median(x[1:])*1000) if len(x)>1 else None,'sam_events':self.events,'sam_camera_calls':sum(e['camera_calls'] for e in self.events)}
+        return {'sam_interval':self.sam_interval,'sam_frames':len(self.events),'sam_frame_rate':len(self.events)/max(len(x),1),'frames':len(x),'step_seconds':float(x.sum()),'step_fps':float(len(x)/x.sum()) if len(x) else 0,'steady_median_ms':float(np.median(x[1:])*1000) if len(x)>1 else None,'sam_events':self.events,'sam_camera_calls':sum(e['camera_calls'] for e in self.events)}

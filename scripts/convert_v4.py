@@ -35,6 +35,7 @@ ap.add_argument("--cloth_valid_until", type=int, default=160, help="cloth v1 is 
 ap.add_argument("--skip_existing", action="store_true")
 ap.add_argument("--preview-every",type=int,default=0,help="save atomic partial pose snapshots for quick visual validation")
 ap.add_argument("--save-seg-dir",help="optional QA cache of labels used at each tick; export excluded from timing")
+ap.add_argument("--sam-interval",type=int,default=0,help="Periodic SAM refresh plus failures; 0=events only")
 ap.add_argument("--depth-mesh",action="store_true",help="depth/mesh tracking; SAM only at initialization or failed-fit recovery")
 ap.add_argument("--online-seg", action="store_true", help="run the same current-frame segmenter used live instead of replaying cached masks")
 ap.add_argument("--sam-ckpt",default="/home/howardji/realpc/.model_cache/sam2/sam2.1_hiera_small.pt")
@@ -43,6 +44,7 @@ a = ap.parse_args()
 if a.depth_mesh:
     if a.online_seg:ap.error("--depth-mesh and --online-seg are separate modes")
     os.environ["REALPC_DEPTH_MESH"]="1"
+    os.environ["REALPC_SAM_INTERVAL"]=str(a.sam_interval)
 
 cfg = load_config(os.path.join(ROOT, "configs", "yam_bimanual.json")); r = cfg["robot"]
 tarm = TorchArm(os.path.join(cfg["_dir"], r["urdf"]), r["arm_joints"], r["finger_joints"])
@@ -79,7 +81,7 @@ for epp in a.episodes:
         conv.seg={};segmenter=OnlineObjectSegmenter(conv,model)
     os.makedirs(os.path.dirname(out_p),exist_ok=True)
     source_files=list(Path(ROOT,"realpc").glob("*.py"))+[Path(a.calib)]+list(Path(lib).glob("*.ply"))+list(Path(lib).glob("*.json"))
-    run_manifest={"commit":commit,"initialization":"current RGB-D","online_seg":a.online_seg,"depth_mesh":a.depth_mesh,"start":a.start,"code_asset_sha256":{str(p.relative_to(Path(ROOT).resolve())) if p.is_relative_to(Path(ROOT).resolve()) else str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in source_files},"settings":{k:os.environ.get(k) for k in ["REALPC_SIL","REALPC_CAM_EQUAL","REALPC_SIL_METHOD","REALPC_COLD_COMPONENTS","REALPC_BROOM_MATERIAL","REALPC_BROOM_CLEAN_MASK","REALPC_BROOM_HOLE","REALPC_WRIST_WEIGHT","REALPC_BROOM_REJECT_BG"]}}
+    run_manifest={"commit":commit,"initialization":"current RGB-D","online_seg":a.online_seg,"depth_mesh":a.depth_mesh,"start":a.start,"code_asset_sha256":{str(p.relative_to(Path(ROOT).resolve())) if p.is_relative_to(Path(ROOT).resolve()) else str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in source_files},"settings":{k:os.environ.get(k) for k in ["REALPC_SAM_INTERVAL","REALPC_SIL","REALPC_CAM_EQUAL","REALPC_SIL_METHOD","REALPC_COLD_COMPONENTS","REALPC_BROOM_MATERIAL","REALPC_BROOM_CLEAN_MASK","REALPC_BROOM_HOLE","REALPC_WRIST_WEIGHT","REALPC_BROOM_REJECT_BG"]}}
     json.dump(run_manifest,open(out_p[:-4]+"_run.json","w"),indent=2)
     T_total = len(ep.low["t_cap"]); stop = min(a.stop or T_total, T_total)
     ticks = np.arange(a.start, stop)
