@@ -13,11 +13,9 @@ for t in range(a.stop):
   ok,im=caps[c].read();assert ok;_,raw=ds[c].next();D=raw.astype(np.float32)*float(ep.meta['depth_scale'][c]);h,w=im.shape[:2];scale=640/w;im=cv2.resize(im,(640,round(h*scale)));D=cv2.resize(D,(640,round(h*scale)),interpolation=0);K=ep.intrinsics(c).copy();K[:2]*=scale;seed=None
   if t==0:
    if c=='top':
-    # Explicit current-t0 shirt prompt, not a future mask or recorded trajectory.
-    # Grey table and grey cloth cannot be separated by a global HSV threshold.
-    seed=np.zeros(D.shape,np.uint8)
-    cv2.fillPoly(seed,[np.array([[184,181],[253,128],[310,112],[351,125],[398,106],[464,129],[547,162],[494,190],[436,176],[461,213],[509,263],[424,257],[352,264],[282,262],[292,218],[325,187],[269,197],[237,216]],np.int32)],1)
-    seed=seed.astype(bool)
+    from realpc.cloth_seed import depth_seed
+    seed,table_plane=depth_seed(dict(frame,top_depth=D,top_K=K,top_T=T[c],top_rgb=im))
+    json.dump({'initialization':'current depth above robust table plane minus FK robot; no hand prompt','plane_z=ax+by+c':table_plane.tolist(),'causal':True},open(out/'initialization.json','w'),indent=2)
    else:
     uv,z=project(initP,K,T[c]);xy=np.round(uv).astype(int);keep=(z>.08)&(xy[:,0]>=0)&(xy[:,0]<640)&(xy[:,1]>=0)&(xy[:,1]<D.shape[0]);seed=np.zeros(D.shape,np.uint8);seed[xy[keep,1],xy[keep,0]]=1;seed=cv2.dilate(seed,np.ones((7,7),np.uint8)).astype(bool)
   m=masker.step(c,im,seed);saved[c].append(m);frame.update({c+'_rgb':im,c+'_depth':D,c+'_K':K,c+'_T':T[c],c+'_mask':m})
