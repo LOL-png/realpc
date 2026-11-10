@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 from realpc.cloth_sparse_masks import SparseClothMasks
-left=SparseClothMasks('unused',interval=5);right=SparseClothMasks('unused',interval=5)
+left=SparseClothMasks('unused',interval=5);right=SparseClothMasks('unused',interval=5,fast_neighbors=True)
 # Deterministic current-seed oracle exercises scheduling/geometry, not SAM quality.
 for m in (left,right):m._sam=lambda image,seed,cam=None:seed.copy()
 for t in range(6):
@@ -20,4 +20,4 @@ assert left.summary()['sam_camera_calls']==sum(e['camera_calls'] for e in left.e
 try:left.step(8,f)
 except AssertionError:pass
 else:raise AssertionError('Nonsequential packet accepted')
-print('PASS cached masks ignored, exact current/past replay, sparse scheduling, actual call accounting')
+print('PASS cached masks ignored, exact bounded/unbounded neighbors and current/past replay, sparse scheduling, actual call accounting')

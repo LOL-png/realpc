@@ -71,13 +71,17 @@ for epp in a.episodes:
     obj_held = np.zeros((P, len(ticks)), np.int8)
     obj_support = np.zeros((P, len(ticks), 2), np.int32); obj_mode = np.full((P, len(ticks)), "", dtype="<U16")
     qL = np.zeros((len(ticks), 7)); qR = np.zeros((len(ticks), 7))
-    cloth = None; cloth_samples=[]; cloth_observed=[]; cloth_metrics=[]
+    cloth = None; cloth_pipeline=None; cloth_samples=[]; cloth_observed=[]; cloth_metrics=[]
     if ep.task == 'greycloth' and a.cloth_causal_inputs:
         if a.start != 0:raise ValueError('Causal cloth conversion must start at t0 or restore its past state')
         from realpc.cloth_causal import CausalClothTracker, at_image
         from realpc.cloth_inputs import project
         options=json.load(open(a.cloth_causal_config)) if a.cloth_causal_config else {}
-        cloth=CausalClothTracker.from_config(options)
+        if options.get('mask_interval') is not None:
+            if a.cloth_cot_inputs:raise ValueError('Sparse cloth pipeline must generate its own tracks; omit cached cloth_cot_inputs')
+            from realpc.cloth_pipeline import CausalClothPipeline
+            cloth_pipeline=CausalClothPipeline(options);cloth=cloth_pipeline.tracker
+        else:cloth=CausalClothTracker.from_config(options)
     for k, t in enumerate(ticks):
         frames = {}
         for c in ("top", "side"):
@@ -90,7 +94,8 @@ for epp in a.episodes:
                 packet={key:z[key] for key in z.files}
             if a.cloth_cot_inputs:
                 with np.load(os.path.join(a.cloth_cot_inputs,f'{t:04d}.npz')) as z:packet.update({key:z[key] for key in z.files})
-            _,cm,views=cloth.step(int(t),packet,iters=options.get('iters',5))
+            if cloth_pipeline is not None:_,cm,views=cloth_pipeline.step(int(t),packet)
+            else:_,cm,views=cloth.step(int(t),packet,iters=options.get('iters',5))
             S=cloth.cm.samples()[:4000];observed=np.zeros(len(S),bool)
             for c in ('top','side'):
                 uv,zz=project(S,views[c]['K'],views[c]['T']);dd,inside=at_image(views[c]['D'],uv)
@@ -157,6 +162,7 @@ for epp in a.episodes:
     np.savez_compressed(out_p, **res)
     if cloth is not None:
         json.dump(cloth_metrics,open(out_p.replace('.npz','_cloth_metrics.json'),'w'))
+        if cloth_pipeline is not None:json.dump(cloth_pipeline.summary(),open(out_p.replace('.npz','_cloth_pipeline.json'),'w'),indent=2)
     qa = {"episode": f"{ep.task}/{ep.name}", "ticks": int(len(ticks)), "seconds": round(time.time() - t0, 1),
           "n_robot": int(len(arms.local)), "n_static": int(len(res["static_points"])),
           "n_object": int(sum(len(o.samples) for o in conv.objs)), "n_cloth": int(res["cloth_points"].shape[0]) if "cloth_points" in res else 0,

@@ -4,11 +4,11 @@ from pathlib import Path
 import numpy as np,cv2
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 from realpc.cloth_sparse_masks import SparseClothMasks
-p=argparse.ArgumentParser();p.add_argument('--sam-backend',choices=['video','image'],default='video');p.add_argument('--inputs',required=True);p.add_argument('--out',required=True);p.add_argument('--interval',type=int,default=10);p.add_argument('--stop',type=int,default=453);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--fast-neighbors',action='store_true');p.add_argument('--sam-backend',choices=['video','image'],default='video');p.add_argument('--inputs',required=True);p.add_argument('--out',required=True);p.add_argument('--interval',type=int,default=10);p.add_argument('--stop',type=int,default=453);a=p.parse_args()
 out=Path(a.out);out.mkdir(parents=True,exist_ok=True);(out/'frames').mkdir(exist_ok=True)
 import hashlib
 (out/'provenance.json').write_text(json.dumps(dict(arguments=vars(a),source_sha256={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in [Path(__file__),ROOT/'realpc/cloth_sparse_masks.py',ROOT/'realpc/cloth_inputs.py']}),indent=2))
-m=SparseClothMasks('/home/howardji/realpc/.model_cache/sam2/sam2.1_hiera_small.pt',a.interval,sam_backend=a.sam_backend);rows=[];start=time.perf_counter()
+m=SparseClothMasks('/home/howardji/realpc/.model_cache/sam2/sam2.1_hiera_small.pt',a.interval,sam_backend=a.sam_backend,fast_neighbors=a.fast_neighbors);rows=[];start=time.perf_counter()
 for t in range(a.stop):
     f=dict(np.load(Path(a.inputs)/'frames'/f'{t:04d}.npz'));reference={c:f.pop(c+'_mask') for c in m.cameras}
     masks,info=m.step(t,f);scores={}

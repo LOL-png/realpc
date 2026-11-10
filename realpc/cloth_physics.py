@@ -139,6 +139,7 @@ def joint_step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,max_stre
     if contact is not None:result=contact.filter(X,result)
     direction=result-X
     def energy(Y):
+        if contact is not None and contact.intersects(Y):return np.inf
         ll=np.linalg.norm(Y[E[:,0]]-Y[E[:,1]],axis=1);rr=ll-np.clip(ll,rest*(1-band),rest*(1+band))
         value=.5*np.sum(Y*(A@Y))-np.sum(rhs*Y)+.5*np.sum(weights*rr*rr)
         if ray_H is not None:value+=.5*Y.ravel()@(ray_H@Y.ravel())-ray_rhs@Y.ravel()
@@ -182,8 +183,15 @@ class IPCContact:
         return g,H
     def filter(self,X,Y):
         alpha=float(self.ipc.compute_collision_free_stepsize(self.mesh,X,Y,min_distance=self.min_distance,broad_phase=self.broad_phase,narrow_phase_ccd=self.ccd))
-        self.last_alpha=alpha
-        return X+min(1.,.9*alpha if alpha<1 else 1.)*(Y-X)
+        scale=min(1.,.9*alpha if alpha<1 else 1.)
+        candidate=X+scale*(Y-X);self.endpoint_backtracks=0
+        # Additive CCD warns that machine-scale gaps can miss a collision.
+        # Never accept an intersecting endpoint merely because its TOI passed.
+        while self.intersects(candidate) and self.endpoint_backtracks<24:
+            scale*=.5;candidate=X+scale*(Y-X);self.endpoint_backtracks+=1
+        if self.intersects(candidate):candidate=X.copy();scale=0.
+        self.last_alpha=scale
+        return candidate
     def energy(self,X):
         cs=self.ipc.NormalCollisions();cs.build(self.mesh,X,self.dhat,dmin=self.min_distance,broad_phase=self.broad_phase)
         return float(self.barrier(cs,self.mesh,X))

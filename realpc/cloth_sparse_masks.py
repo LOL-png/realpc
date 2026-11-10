@@ -11,7 +11,8 @@ from .cloth_inputs import unproject, project
 from .cloth_seed import depth_seed
 
 class SparseClothMasks:
-    def __init__(self,checkpoint,interval=10,cameras=('top','side'),sam_backend='video'):
+    def __init__(self,checkpoint,interval=10,cameras=('top','side'),sam_backend='video',fast_neighbors=False):
+        self.fast_neighbors=fast_neighbors
         self.checkpoint=checkpoint;self.interval=interval;self.cameras=cameras;self.sam_backend=sam_backend;self.video=None
         self.predictor=None;self.cloud=None;self.plane=None;self.previous=None
         self.tick=-1;self.last_sam=-1000;self.events=[];self.timings=[];self.previous_area={};self.previous_images={};self.previous_masks={}
@@ -58,7 +59,7 @@ class SparseClothMasks:
             D,K,T,rgb=[frame[cam+'_'+k] for k in ('depth','K','T','rgb')]
             P,uv=unproject(D,K,T,2);height=P[:,2]-np.c_[P[:,:2],np.ones(len(P))]@self.plane
             color=cv2.cvtColor(rgb,cv2.COLOR_BGR2HSV)[uv[:,1],uv[:,0]]
-            rd=robot.query(P,workers=1)[0];distance=tree.query(P,workers=1)[0]
+            rd=robot.query(P,workers=1,distance_upper_bound=.012000001 if self.fast_neighbors else np.inf)[0];distance=tree.query(P,workers=1,distance_upper_bound=.070000001 if self.fast_neighbors else np.inf)[0]
             workspace=(P[:,0]>.05)&(P[:,0]<1.15)&(P[:,1]>-.85)&(P[:,1]<.35)&(height>-.003)&(height<.8)
             # A narrow gate includes cloth resting at table height; the wider
             # gate admits an elevated fold moving away from its previous surface.
@@ -89,7 +90,7 @@ class SparseClothMasks:
         for cam in self.cameras:
             P,_=unproject(frame[cam+'_depth'],frame[cam+'_K'],frame[cam+'_T'],2,masks[cam])
             h=P[:,2]-np.c_[P[:,:2],np.ones(len(P))]@self.plane
-            elevated_clouds[cam]=P[(h>.008)&(robot.query(P,workers=1)[0]>.012)]
+            elevated_clouds[cam]=P[(h>.008)&(robot.query(P,workers=1,distance_upper_bound=.012000001 if self.fast_neighbors else np.inf)[0]>.012)]
         cross_seeds={}
         for cam in self.cameras:
             sources=[P for other,P in elevated_clouds.items() if other!=cam and len(P)]
@@ -117,7 +118,7 @@ class SparseClothMasks:
                 self.last_sam=t;self.events.append(dict(tick=t,reason='init' if t==0 else ('failure' if bad else 'periodic'),camera_calls=calls,diagnostics=diagnostics))
         points=[]
         for cam in self.cameras:
-            P,uv=unproject(frame[cam+'_depth'],frame[cam+'_K'],frame[cam+'_T'],2,masks[cam]);P=P[robot.query(P,workers=1)[0]>.012]
+            P,uv=unproject(frame[cam+'_depth'],frame[cam+'_K'],frame[cam+'_T'],2,masks[cam]);P=P[robot.query(P,workers=1,distance_upper_bound=.012000001 if self.fast_neighbors else np.inf)[0]>.012]
             if len(P):points.append(P)
             self.previous_area[cam]=int(masks[cam].sum())
             self.previous_images[cam]=cv2.cvtColor(frame[cam+'_rgb'],cv2.COLOR_BGR2GRAY);self.previous_masks[cam]=masks[cam].copy()
@@ -129,4 +130,4 @@ class SparseClothMasks:
 
     def summary(self):
         n=len(self.timings);calls=sum(e['camera_calls'] for e in self.events)
-        return dict(interval=self.interval,sam_backend=self.sam_backend,frames=n,sam_frames=len(self.events),sam_frame_rate=len(self.events)/max(n,1),sam_camera_calls=calls,seconds=sum(self.timings),fps=n/max(sum(self.timings),1e-9),events=self.events,causal=True)
+        return dict(fast_neighbors=self.fast_neighbors,interval=self.interval,sam_backend=self.sam_backend,frames=n,sam_frames=len(self.events),sam_frame_rate=len(self.events)/max(n,1),sam_camera_calls=calls,seconds=sum(self.timings),fps=n/max(sum(self.timings),1e-9),events=self.events,causal=True)

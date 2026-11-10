@@ -44,7 +44,8 @@ class CausalClothTracker:
         keys=inspect.signature(cls).parameters
         return cls(**{k:v for k,v in config.items() if k in keys})
 
-    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False, landmark_grasp=False, init_landmarks=False, native_init_gain=None, shirt_layers=2, init_registration_iters=0, init_registration_strain=50., init_registration_arap=.2, init_registration_data=8., init_registration_coverage=20., init_registration_bending=.2, init_registration_contour=80., init_registration_focus=1., feasible_predict=False, contact_clearance=0.):
+    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False, landmark_grasp=False, init_landmarks=False, native_init_gain=None, shirt_layers=2, init_registration_iters=0, init_registration_strain=50., init_registration_arap=.2, init_registration_data=8., init_registration_coverage=20., init_registration_bending=.2, init_registration_contour=80., init_registration_focus=1., feasible_predict=False, contact_clearance=0., contact_stiffness=1e9):
+        self.contact_stiffness=contact_stiffness
         self.contact_clearance=contact_clearance
         self.feasible_predict=feasible_predict
         self.init_registration_focus=init_registration_focus
@@ -398,7 +399,7 @@ class CausalClothTracker:
         X=self.cm.X.copy();Xp=X.copy();n=len(X);E=self.cm.E
         if self.ipc_contact and not hasattr(self,'ipc_state'):
             from .cloth_physics import IPCContact
-            self.ipc_state=IPCContact(X,E,self.cm.F,min_distance=getattr(self,"contact_clearance",0.))
+            self.ipc_state=IPCContact(X,E,self.cm.F,min_distance=getattr(self,"contact_clearance",0.),stiffness=getattr(self,"contact_stiffness",1e9))
         pi,pt=self.update_pins(frame,X,v)
         hi,ht=pi,pt
         if self.template=='shirt' and self.point_grasp and len(pi):
