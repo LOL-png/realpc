@@ -10,3 +10,4 @@ cache/
 .cache/
 
 !assets/objects/*/*_points.npz
+!assets/objects_v3/*/*_points.npz

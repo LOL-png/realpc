@@ -25,7 +25,7 @@ rows = []
 for f in sorted(glob.glob(os.path.join(a.lib, "*.ply"))):
     m = trimesh.load(f, process=False)
     meta = json.load(open(f[:-4] + ".json"))
-    V = torch.tensor(np.asarray(m.vertices), dtype=torch.float32, device="cuda")
+    V = torch.tensor(np.asarray(m.vertices) - m.bounds.mean(0), dtype=torch.float32, device="cuda")
     Fc = torch.tensor(np.asarray(m.faces), dtype=torch.int64, device="cuda")
     col = np.asarray(m.visual.vertex_colors)[:, :3] / 255.0 if hasattr(m.visual, "vertex_colors") else np.full((len(V), 3), 0.7)
     tex = TexturesVertex(torch.tensor(col, dtype=torch.float32, device="cuda")[None])

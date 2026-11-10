@@ -21,6 +21,8 @@ from realpc.v4 import SCHEMA  # noqa: E402
 ap = argparse.ArgumentParser()
 ap.add_argument("--out_dir", required=True); ap.add_argument("--align", nargs="*", default=[])
 ap.add_argument("--calib", default=os.path.join(ROOT, "configs", "calib_yam_rig_v3.json"))
+ap.add_argument("--dataset-name", default="agentwm_v1")
+ap.add_argument("--assets", default=os.path.join(ROOT,"assets","objects"))
 a = ap.parse_args()
 
 
@@ -34,7 +36,8 @@ def sha(p):
 
 cal = json.load(open(a.calib))
 lib = {}
-for f in sorted(glob.glob(os.path.join(ROOT, "assets", "objects", "*", "*.json"))):
+for f in sorted(glob.glob(os.path.join(a.assets, "*", "*.json"))):
+    if not os.path.exists(f[:-5]+".ply"):continue
     m = json.load(open(f))
     lib[f"{m['task']}/{m['name']}"] = {"version": m.get("version", "v1"), "n_scans": m.get("n_scans", len(m.get("scans", []))),
                                       "extents_m": m["extents_m"], "watertight": m["watertight"],
@@ -47,7 +50,7 @@ for p in sorted(glob.glob(os.path.join(a.out_dir, "*", "episode_*.npz"))):
 commit = subprocess.run(["git", "-C", ROOT, "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
 res = [o["res_med_mm"] for e in eps for o in e["qa"].get("objects", {}).values() if o.get("res_med_mm") is not None]
 man = {
-    "dataset": "agentwm_v1 (ChongkaiGao/agentworldmodel, 52 episodes: sweep 50, hang 1, greycloth 1)",
+    "dataset": a.dataset_name + " (ChongkaiGao/agentworldmodel, 52 episodes: sweep 50, hang 1, greycloth 1)",
     "created": datetime.datetime.now().isoformat(timespec="seconds"), "code_commit": commit,
     "converter": "realpc.v4.StreamConverter (causal: every tick uses frames <= t; the same class serves live inference)",
     "causal": True,

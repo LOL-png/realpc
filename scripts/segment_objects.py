@@ -25,11 +25,13 @@ from realpc.v4 import StreamConverter  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--episode", required=True); ap.add_argument("--out_dir", required=True)
+ap.add_argument("--cameras",nargs="+",default=["top","side"],choices=["top","side"])
 ap.add_argument("--start", type=int, default=0); ap.add_argument("--stop", type=int, default=None)
 ap.add_argument("--calib", default=os.path.join(ROOT, "configs", "calib_yam_rig_v3.json"))
 ap.add_argument("--assets", default=os.path.join(ROOT, "assets", "objects"))
 ap.add_argument("--sam_ckpt", default=os.path.join(ROOT, ".model_cache", "sam2", "sam2.1_hiera_small.pt"))
-ap.add_argument("--cold", action="store_true")
+ap.add_argument("--cold", action="store_true", default=True)
+ap.add_argument("--image-refine-seeds", action="store_true", help="infer initial silhouettes from RGB using mesh-derived boxes/points, instead of copying mesh masks")
 a = ap.parse_args()
 from sam2.build_sam import build_sam2_video_predictor  # noqa: E402
 
@@ -68,7 +70,7 @@ class Frames:
         return (x - MEAN) / STD
 
 
-for c in ("top", "side"):
+for c in a.cameras:
     t0 = time.time()
     cap = cv2.VideoCapture(ep.video(c)); cap.set(cv2.CAP_PROP_POS_FRAMES, a.start)
     ims = []
@@ -79,46 +81,14 @@ for c in ("top", "side"):
         H0, W0 = im.shape[:2]
         ims.append(cv2.resize(im, (640, int(round(H0 * 640 / W0)))))
     h, w = ims[0].shape[:2]
-    # seeds: our renders at the start tick (objects: library meshes at their initial poses; arms: FK meshes)
-    K = ep.intrinsics(c).copy(); K[:2] *= 640 / W0
-    R = Renderer(K, h, w)
-    Tcw = torch.tensor(np.linalg.inv(cal.T_world_cam(c)), dtype=torch.float32, device="cuda")
-    zbufs, ids = [], []
-    for i, o in enumerate(conv.objs):
-        Tt = torch.tensor(init[o.name], dtype=torch.float32, device="cuda")
-        Vw = o.verts_t @ Tt[:3, :3].T + Tt[:3, 3]
-        _, z = R.raster((Vw @ Tcw[:3, :3].T + Tcw[:3, 3])[None], o.faces_t)
-        zbufs.append(z[0].cpu().numpy()); ids.append(i + 1)
-    tq = cal.robot_tick(ep, c, a.start)
-    for s, oid in (("left", 254), ("right", 255)):
-        q = cal.q_at(ep, s, tq)
-        V = tarm.verts(torch.tensor(q[None], dtype=torch.float32, device="cuda"))[0]
-        Tb = torch.tensor(cal.T_cam_base(c, s), dtype=torch.float32, device="cuda")
-        _, z = R.raster((V @ Tb[:3, :3].T + Tb[:3, 3])[None], tarm.faces)
-        zbufs.append(z[0].cpu().numpy()); ids.append(oid)
-    Z = np.stack([np.where(z > 0, z, np.inf) for z in zbufs])
-    front = np.argmin(Z, 0); anyv = np.isfinite(Z).any(0)
-    seeds = {}
-    for k, oid in enumerate(ids):
-        m = anyv & (front == k)
-        m = cv2.erode(m.astype(np.uint8), np.ones((5, 5), np.uint8)).astype(bool)      # stay inside: calibration / mesh slack
-        if m.sum() >= 40:
-            seeds[oid] = m
+    from realpc.online_masks import render_seeds
+    q={side:cal.q_at(ep,side,cal.robot_tick(ep,c,a.start)) for side in ['left','right']}
+    seeds,zbufs,ids=render_seeds(conv,c,(h,w),q)
     labels = np.zeros((len(ims), h, w), np.uint8)
-    tmp = os.path.join(a.out_dir, "_single"); os.makedirs(tmp, exist_ok=True)
-    cv2.imwrite(os.path.join(tmp, "000000.jpg"), ims[0])
-    with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
-        state = model.init_state(tmp, offload_video_to_cpu=True, offload_state_to_cpu=True)
-        state["images"] = Frames(ims, model.image_size); state["num_frames"] = len(ims)
-        state["video_height"], state["video_width"] = h, w
-        for oid, m in seeds.items():
-            model.add_new_mask(state, frame_idx=0, obj_id=int(oid), mask=m)
-        for fi, oids, logits in model.propagate_in_video(state, start_frame_idx=0):
-            x = logits[:, 0].float().cpu().numpy()
-            best = np.argmax(x, 0); val = np.max(x, 0)
-            lab = np.array(oids, np.uint8)[best]
-            labels[fi][val > 0] = lab[val > 0]
-        model.reset_state(state)
+    from realpc.online_masks import ObjectMaskStream
+    memory=ObjectMaskStream(model,ims[0],seeds,zbufs,ids,frames0[c][0],cold=a.cold,image_refine=a.image_refine_seeds,debug_dir=a.out_dir,reference_colors={i+1:np.load(os.path.join(lib,o.name+"_points.npz"))["C"] for i,o in enumerate(conv.objs)})
+    for fi,im in enumerate(ims):labels[fi]=memory.step(im)
+    model.reset_state(memory.state)
     np.savez_compressed(os.path.join(a.out_dir, ep.task, f"{ep.name}_{c}.npz"), labels=labels, start=a.start,
-                        names=np.array([o.name for o in conv.objs]), seeds=np.array(sorted(seeds)))
+                        names=np.array([o.name for o in conv.objs]), seeds=np.array(sorted(seeds)), image_refined_seed=a.image_refine_seeds)
     print(f"{ep.task}/{ep.name} {c}: {len(ims)} frames, seeds {sorted(seeds)}, {time.time() - t0:.0f} s", flush=True)
