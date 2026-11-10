@@ -26,27 +26,13 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--converted", nargs="+", required=True); ap.add_argument("--out", required=True)
 ap.add_argument("--fb_ckpt", default=None); ap.add_argument("--rc_ckpt", default=None)
 ap.add_argument("--n_hist", type=int, default=16); ap.add_argument("--n_fut", type=int, default=32); ap.add_argument("--stride", type=int, default=48)
+ap.add_argument("--tok", nargs="+", choices=["default", "segments"], default=["default", "segments"])
+ap.add_argument("--fb-only", action="store_true", help="Skip RC-sized analytic/learned variants")
 a = ap.parse_args()
 sp, sl = _load_plwm()
 
 
-class TracksView:
-    """adapter: v4 dataset -> the Tracks fields make_window uses (robot first)."""
-
-    def __init__(self, d):
-        g = d["group"]
-        rob = g <= 1
-        order = np.r_[np.flatnonzero(rob), np.flatnonzero(~rob)]
-        self.pos = d["points"].transpose(1, 0, 2)[order].copy()
-        self.pos[~d["valid"].T[order]] = np.nan
-        gg = np.where(rob, np.where(d["is_finger"], 0, 1), np.where(g == 2, 2, np.where(g == 3, 3, 4)))[order]
-        self.group = gg
-        # robot: link body ids; scene: segment id (objects 1000+obj, static 999, cloth 998)
-        nb = len(d["robot_bodies"])
-        rb = np.r_[d["robot_body"].astype(int), np.zeros(int((~rob).sum()), int)]
-        seg = np.where(g == 3, 1000 + d["obj_id"].astype(int), np.where(g == 2, 999, 998))
-        self.body = np.where(np.r_[np.ones(int(rob.sum()), bool), np.zeros(int((~rob).sum()), bool)], rb, seg[order])
-        self.n_robot = int(rob.sum())
+from roundtrip_adapter import TracksView
 
 
 def segment_tokenise(self, a_, g, body, valid):
@@ -99,6 +85,8 @@ if a.fb_ckpt:
     aes.append(("fb4096_learned", lambda: build_learned(sp, sl, a.fb_ckpt), 4096))
 if a.rc_ckpt:
     aes.append(("rc16k_learned", lambda: build_learned(sp, sl, a.rc_ckpt), 16384))
+if a.fb_only:
+    aes = [entry for entry in aes if entry[0].startswith("fb4096")]
 out = {}
 for cp in a.converted:
     d = load(cp)
@@ -108,7 +96,7 @@ for cp in a.converted:
     key = f"{d['task']}/{d['episode']}"
     out[key] = {}
     for nm, mk, npts in aes:
-        for tok in ("default", "segments"):
+        for tok in a.tok:
             ae = patch(mk(), tok)
             res = []
             for k0 in k0s:
@@ -125,4 +113,9 @@ for cp in a.converted:
                     agg[gname] = {"mean_mm": float(np.mean(v)), "p90_mm": float(np.mean(p)) if p else None, "windows": len(v)}
             out[key][f"{nm}/{tok}"] = agg
             print(key, nm, tok, {k: round(v["mean_mm"], 2) for k, v in agg.items()}, flush=True)
-json.dump(out, open(a.out, "w"), indent=1)
+    # Save after each episode so a long dataset audit is resumable.
+    from pathlib import Path
+    output = Path(a.out)
+    temp = output.with_suffix(".tmp.json")
+    temp.write_text(json.dumps(out, indent=1))
+    temp.replace(output)

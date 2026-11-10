@@ -2,7 +2,7 @@
 
 The current entry point is `ScenePipeline.step(t, frames, q)` in `realpc/scene_pipeline.py`. Live inference and training-data conversion call this same function. It produces fixed-identity robot, rigid-object, static-scene and cloth points from current RGB-D and calibrated joints.
 
-The unified pipeline is undergoing whole-episode validation. The shared candidate is **SAM every 10 processed frames, plus failures**. Final speed/alignment measurements and the release tag will be recorded in `docs/VALIDATION.md`.
+The shared policy is **SAM every 10 processed frames, plus failures**. Whole-episode checks are complete for sweep, hang and cloth; dataset-wide QA follows conversion. See [validation and limitations](docs/VALIDATION.md) for alignment, speed and the unresolved second cloth fold.
 
 ## What runs
 

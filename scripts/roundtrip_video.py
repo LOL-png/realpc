@@ -26,7 +26,9 @@ COL = {0: (0, 220, 255), 1: (0, 140, 255), 2: (150, 150, 150), 3: (255, 200, 0),
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--tracks", required=True)
+    source = ap.add_mutually_exclusive_group(required=True)
+    source.add_argument("--tracks")
+    source.add_argument("--converted", help="realpc.dataset.load-compatible episode")
     ap.add_argument("--t0", type=int, required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--ckpt", default=None)
@@ -37,7 +39,12 @@ def main():
     ap.add_argument("--fps", type=int, default=8)
     a = ap.parse_args()
     sp, sl = _load_plwm()
-    tr = Tracks.load(a.tracks)
+    if a.converted:
+        from realpc.dataset import load
+        from roundtrip_adapter import TracksView
+        tr = TracksView(load(a.converted))
+    else:
+        tr = Tracks.load(a.tracks)
     b, info = make_window(tr, a.t0, n_points=a.n_points, seed=a.t0)
     decs = [("analytic (Kabsch, no residual)", build_analytic(sp, a.n_robot, a.n_scene))]
     if a.ckpt:
@@ -58,7 +65,7 @@ def main():
         gt = np.full((400, 480, 3), 20, np.uint8)
         ok = np.isfinite(X[:, s]).all(1)
         draw_points(gt, X[ok, s], cols[ok], Tv, Kv, r=1)
-        cv2.putText(gt, "GT tracks", (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.putText(gt, "Extracted input" if a.converted else "GT tracks", (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
         panels.append(gt)
         for nm, D, E, e in outs:
             Dk = np.concatenate([D[:, :16], info["A"][:, None], D[:, 16:]], 1)
@@ -73,7 +80,7 @@ def main():
         em = np.full((400, 480, 3), 20, np.uint8)
         ec = cv2.applyColorMap(np.clip(np.nan_to_num(Ek) / 0.02 * 255, 0, 255).astype(np.uint8)[:, None], cv2.COLORMAP_TURBO)[:, 0]
         draw_points(em, X[ok, s], ec[ok], Tv, Kv, r=1)
-        cv2.putText(em, f"error of '{nm}' on GT (0..20 mm)", (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.putText(em, f"error of '{nm}' on input (0..20 mm)", (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1, cv2.LINE_AA)
         panels.append(em)
         frame = np.concatenate(panels, 1)
         bar = np.zeros((30, frame.shape[1], 3), np.uint8)

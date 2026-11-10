@@ -19,3 +19,14 @@ python tests/check_scene_live_parity.py \
 ```
 
 The test blocks video/joint recording access inside the live step, compares decoded points and saved masks, and records the actual SAM frame count. Legacy `convert_v4.py --depth-mesh` and cadence scripts remain research ablations only.
+
+For a complete collection with bounded local concurrency:
+
+```bash
+python scripts/convert_scene_batch.py --episodes-root /path/to/recordings \
+  --out /path/to/dataset_v2 --workers 2
+python scripts/qa_scene_dataset.py --dataset /path/to/dataset_v2 \
+  --out /path/to/qa --example-videos --cloth-reference-inputs /path/to/qa_packets
+```
+
+The batch wrapper resumes completed files only when code/assets/config match, then verifies the complete collection and writes `SHA256SUMS`. Cloth reference packets are used only by the optional QA renderer/audit, never conversion. `verify_scene_dataset.py` can repeat the loader and checksum checks independently.
