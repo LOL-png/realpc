@@ -15,7 +15,7 @@ for cam,t in [('top',0),('side',200),('side',280),('side',460),('right_wrist',10
    V=torch.tensor(np.asarray(mesh.vertices)@T[:3,:3].T+T[:3,3],dtype=torch.float32,device='cuda');F=torch.tensor(mesh.faces,dtype=torch.int64,device='cuda');s,d=R.raster(V[None],F);mask=s[0].cpu().numpy()>0
   im=rgb.copy();cs,_=cv2.findContours(mask.astype(np.uint8),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE);cv2.drawContours(im,cs,-1,(0,255,255),1);tiles.append(im)
  ts=[]
- for label,im in zip(['raw','old arc','new spline'],tiles):
+ for label,im in zip(['raw','previous handle','ear spline'],tiles):
   scale=min(320/im.shape[1],280/im.shape[0]);im=cv2.resize(im,None,fx=scale,fy=scale);tile=np.full((310,340,3),245,np.uint8);tile[28:28+len(im),:im.shape[1]]=im;cv2.putText(tile,f'{cam} {t} {label}'+(' body-fit' if a.registered_wrists and 'wrist' in cam else ''),(6,20),0,.45,(0,0,0),1);ts.append(tile)
  row=np.hstack(ts);rows.append(row);cv2.imwrite(str(out/f'{cam}_{t:04d}.jpg'),row)
 cv2.imwrite(str(out/'before_after.jpg'),np.vstack(rows));new.export(out/'mug.ply')

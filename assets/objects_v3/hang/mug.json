@@ -3,14 +3,14 @@
   "name": "mug",
   "created": "2026-11-09T01:58:18",
   "watertight": true,
-  "volume_m3": 7.661849647673127e-05,
+  "volume_m3": 7.413532493319565e-05,
   "extents_m": [
     0.13123098760843277,
     0.09547649323940277,
-    0.13678755087014494
+    0.13736459850556526
   ],
-  "n_vertices": 3557,
-  "n_faces": 7110,
+  "n_vertices": 3558,
+  "n_faces": 7112,
   "fused_points": 3538,
   "frame": "object frame = mesh centroid, axes parallel to the world (left arm base) frame of the reference episode at its first tick",
   "T_world_obj_ref": [
@@ -83,7 +83,7 @@
   ],
   "n_scans": 1,
   "surf_res_med_mm_all": 3.916193127236584,
-  "version": "v3 mug handle: straight outer strap, rounded spline transitions",
+  "version": "v3 mug handle: asymmetric ear spline with tapered strap",
   "refine_views": 60,
   "refine_tracks": [
     "/home/howardji/data_ext/realpc_v4/trk/hang0_stand_static.npz"
@@ -123,49 +123,51 @@
   ],
   "fit_masks": "causal SAM2 t0 only; no Q28 evaluation masks",
   "fit_views": "initial RGB-D, both fixed cameras; causal/image-refined masks, no Q28 masks",
-  "handle_note": "9-control Hermite swept strap; straight outer leg, rounded-rectangle cross-section. Cup vertex coordinates and triangles unchanged (face order may differ).",
+  "handle_note": "9-control smooth asymmetric ear spline, broader upper lobe and tapered rounded-rectangle cross-section. Cup vertex coordinates and triangles unchanged (face order may differ).",
   "handle_profile": {
     "control": [
       [
-        0.04019222408533096,
-        0.043548841029405594
+        0.04021526500582695,
+        0.04412306845188141
       ],
       [
-        0.048611558973789215,
-        0.04470829665660858
+        0.05211992561817169,
+        0.04528030380606651
       ],
       [
-        0.06150674819946289,
-        0.04401262477040291
+        0.06572525203227997,
+        0.040091902017593384
       ],
       [
-        0.06450674682855606,
-        0.036497145891189575
+        0.0685596913099289,
+        0.029726052656769753
       ],
       [
-        0.06257590651512146,
-        0.020052574574947357
+        0.06341484934091568,
+        0.01648079790174961
       ],
       [
-        0.06064506247639656,
-        0.00360800139605999
+        0.05506867915391922,
+        0.002659659832715988
       ],
       [
-        0.055645063519477844,
-        -0.009340854361653328
+        0.04584130644798279,
+        -0.0065544284880161285
       ],
       [
-        0.04598173871636391,
-        -0.01334085501730442
+        0.040739309042692184,
+        -0.011737354099750519
       ],
       [
-        0.037909846752882004,
-        -0.01334085501730442
+        0.03790486603975296,
+        -0.013464994728565216
       ]
     ],
-    "angle": -0.17102453112602234,
-    "half_thickness": 0.0038972864858806133,
-    "half_width": 0.007718601264059544
+    "angle": -0.16168269515037537,
+    "half_thickness": 0.0035240892320871353,
+    "half_width": 0.007876154035329819,
+    "profile": "ear",
+    "taper_ratio": 0.847306489944458
   },
   "handle_fit_views": "14 fixed-camera + 6 offline body-registered wrist RGB/depth observations; no Q28 masks used for fitting",
   "canonical_body_affine": [
