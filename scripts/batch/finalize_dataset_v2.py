@@ -14,7 +14,7 @@ for f in expected:
 subprocess.run([sys.executable,str(ROOT/'scripts/make_manifest.py'),'--out_dir',str(OUT),'--dataset-name','agentwm_v2','--assets',str(ROOT/'assets/objects_v3')],check=True)
 allrows={};checks=[]
 for p in sorted(OUT.glob('*/*_alignment.json')):
- d=json.load(open(p));checks.append({'episode':d['episode'],'sources':d['summary']})
+ d=json.load(open(p));checks.append({'episode':d['episode'],**{k:{'frames':v['frames'],'iou_median':v['median'],'pass_frac':v['pass']} for k,v in d['summary']['tracker'].items()}})
  for source,parts in d['per_frame'].items():
   for key,vals in parts.items():
    values=np.array(vals)[:,1];allrows.setdefault(source,{}).setdefault(key,[]).append((d['episode'],values))
