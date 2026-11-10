@@ -23,7 +23,9 @@ class DepthMeshPipeline:
                 if st.held is not None:
                     st.T=rob[st.held]['G']@st.T_grip_obj
                 others=[o.samples@c.trk.state[k].T[:3,:3].T+c.trk.state[k].T[:3,3] for k,o in c.trk.objs.items() if k!=n and c.trk.state[k].valid]
-                T=c.trk.relocalize(c.trk.objs[n],views,rob,others)
+                health=self.last_health.get(n,{})
+                severe=health.get('free_fraction',0)>.7 or health.get('support',0)<30
+                T=c.trk.relocalize(c.trk.objs[n],views,rob,others) if severe else None
                 if T is not None:
                     st.T=T;st.valid=True;st.carrier=None;st.T_car_obj=None
                     if st.held is not None:
