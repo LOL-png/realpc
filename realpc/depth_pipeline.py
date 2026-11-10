@@ -20,6 +20,9 @@ class DepthMeshPipeline:
             rob=c.trk.robot(q,c.T_world_base)
             for n in self.pending:
                 st=c.trk.state[n]
+                # The returned SAM mask supplies identity even when the old
+                # geometric search gate has lost the object completely.
+                st.lost=max(st.lost,2)
                 if st.held is not None:
                     st.T=rob[st.held]['G']@st.T_grip_obj
                 others=[o.samples@c.trk.state[k].T[:3,:3].T+c.trk.state[k].T[:3,3] for k,o in c.trk.objs.items() if k!=n and c.trk.state[k].valid]

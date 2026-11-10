@@ -498,7 +498,10 @@ class MeshTracker:
         # A block near a moving tool is not necessarily riding it. Require observed
         # contact and co-motion over three ticks before assigning a rigid carrier.
         for name,st in self.state.items():
-            if getattr(self.objs[name],"passive_fixture",False) or st.held is not None or st.carrier is not None or sum(st.support.values())<60:
+            # Depth proximity / brief co-motion cannot establish a rigid grasp
+            # between two free surfaces. In depth mode retain neighbour motion
+            # as an ICP hypothesis, never as an attachment through a later dump.
+            if self.cfg["depth_mesh"] or getattr(self.objs[name],"passive_fixture",False) or st.held is not None or st.carrier is not None or sum(st.support.values())<60:
                 continue
             o=self.objs[name];W=o.samples@st.T[:3,:3].T+st.T[:3,3];tree=cKDTree(W)
             for parent,car in self.state.items():
