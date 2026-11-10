@@ -3,14 +3,14 @@
   "name": "mug",
   "created": "2026-11-09T01:58:18",
   "watertight": true,
-  "volume_m3": 7.360277538158201e-05,
+  "volume_m3": 7.661849647673127e-05,
   "extents_m": [
-    0.13123098616744974,
-    0.0954764933095963,
-    0.13395591491690534
+    0.13123098760843277,
+    0.09547649323940277,
+    0.13678755087014494
   ],
-  "n_vertices": 1936,
-  "n_faces": 3868,
+  "n_vertices": 3557,
+  "n_faces": 7110,
   "fused_points": 3538,
   "frame": "object frame = mesh centroid, axes parallel to the world (left arm base) frame of the reference episode at its first tick",
   "T_world_obj_ref": [
@@ -83,7 +83,7 @@
   ],
   "n_scans": 1,
   "surf_res_med_mm_all": 3.916193127236584,
-  "version": "v3 smooth prior + shared-two-camera t0 fit",
+  "version": "v3 mug handle: straight outer strap, rounded spline transitions",
   "refine_views": 60,
   "refine_tracks": [
     "/home/howardji/data_ext/realpc_v4/trk/hang0_stand_static.npz"
@@ -123,5 +123,71 @@
   ],
   "fit_masks": "causal SAM2 t0 only; no Q28 evaluation masks",
   "fit_views": "initial RGB-D, both fixed cameras; causal/image-refined masks, no Q28 masks",
-  "handle_note": "Both swept handle endpoints overlap cup wall below the lip; upper axial endpoint repaired after four-view inspection."
+  "handle_note": "9-control Hermite swept strap; straight outer leg, rounded-rectangle cross-section. Cup vertex coordinates and triangles unchanged (face order may differ).",
+  "handle_profile": {
+    "control": [
+      [
+        0.04019222408533096,
+        0.043548841029405594
+      ],
+      [
+        0.048611558973789215,
+        0.04470829665660858
+      ],
+      [
+        0.06150674819946289,
+        0.04401262477040291
+      ],
+      [
+        0.06450674682855606,
+        0.036497145891189575
+      ],
+      [
+        0.06257590651512146,
+        0.020052574574947357
+      ],
+      [
+        0.06064506247639656,
+        0.00360800139605999
+      ],
+      [
+        0.055645063519477844,
+        -0.009340854361653328
+      ],
+      [
+        0.04598173871636391,
+        -0.01334085501730442
+      ],
+      [
+        0.037909846752882004,
+        -0.01334085501730442
+      ]
+    ],
+    "angle": -0.17102453112602234,
+    "half_thickness": 0.0038972864858806133,
+    "half_width": 0.007718601264059544
+  },
+  "handle_fit_views": "14 fixed-camera + 6 offline body-registered wrist RGB/depth observations; no Q28 masks used for fitting",
+  "canonical_body_affine": [
+    [
+      0.5314474196248717,
+      0.2918561340132374,
+      -0.9158363778434329,
+      0.007064040954384343
+    ],
+    [
+      -0.07987779835174905,
+      0.8851321175695622,
+      0.2877388689132943,
+      0.0004168732029867783
+    ],
+    [
+      0.8958985520242568,
+      -0.07421949658733422,
+      0.4906888615178029,
+      -0.008786427547110245
+    ]
+  ],
+  "body_geometry_sha256": "34e824128ec4293afdf9b1e047bf3dd0ce57e4efa5735a320a012a0f26262ce3",
+  "handle_self_intersections": false
 }
