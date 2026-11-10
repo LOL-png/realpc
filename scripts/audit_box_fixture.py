@@ -45,7 +45,7 @@ for i in a.episodes:
    except ValueError:Q=np.zeros((0,3))
    L=(Q-T[:3,3])@T[:3,:3];near=(np.abs(L[:,0])<dims[0]/2+.035)&(np.abs(L[:,1])<dims[1]/2+.035)&(L[:,2]>-.01)&(L[:,2]<dims[2]+.025);Q,L=Q[near],L[near];per[t].append(Q)
    resid=surface_residual(L,dims);Ds=cv2.resize(D,(640,H),interpolation=0);valid=(zz>0)&(Ds>.1)&(Ds>=zz-.015);dr=np.abs(Ds[valid]-zz[valid]);rec={'episode':ep.name,'tick':t,'camera':cam,'observed_points':len(Q),'surface_med_mm':float(np.median(resid)*1000) if len(resid) else None,'surface_p90_mm':float(np.percentile(resid,90)*1000) if len(resid) else None,'within_10mm':float((resid<.010).mean()) if len(resid) else None,'visible_render_pixels':int(valid.sum()),'depth_med_mm':float(np.median(dr)*1000) if len(dr) else None};rec['pass']=None if len(Q)<=100 else bool(len(Q)>100 and rec['within_10mm']>=.9 and len(dr)>100 and rec['depth_med_mm']<5);rec['material_silhouette']=sildata.get(t,{}).get('per_camera',{}).get(cam);records.append(rec)
-   if i in [0,6,10,20,23,25,30,45,49]:
+   if i in [0,6,10,20,23,25,30,38,45,49]:
     im=cv2.resize(im,(640,H));ov=im.copy();m=(zz>0)&(Ds>.1)&(Ds>=zz-.015);cont,_=cv2.findContours(m.astype(np.uint8),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE);cv2.drawContours(ov,cont,-1,(0,210,255),1);tile=np.concatenate([im,ov],1);cv2.putText(tile,f'{ep.name} t={t} {cam} box depth med {rec["depth_med_mm"]:.1f}mm',(8,22),0,.6,(255,255,255),2);images[t].append(cv2.copyMakeBorder(tile,0,480-H,0,0,0))
   cap.release()
  moves=[]
