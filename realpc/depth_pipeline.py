@@ -56,7 +56,7 @@ class DepthMeshPipeline:
             st=c.trk.state[n]
             if getattr(c.trk.objs[n],'passive_fixture',False):continue
             bad=d['visible']>=80 and (d['free_fraction']>.40 or d['support']<30)
-            bad |= any(iou<.50 for iou in d.get('view_iou',{}).values())
+            bad |= any(iou<.65 for iou in d.get('view_iou',{}).values())
             residual,count=st.last_res
             self.last_health[n]={**d,'residual_mm':float(residual*1000) if np.isfinite(residual) else None,'residual_count':int(count),'mode':st.mode}
             bad |= d['visible']>=80 and count>=40 and np.isfinite(residual) and residual>.010

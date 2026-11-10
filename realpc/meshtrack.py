@@ -355,6 +355,7 @@ class MeshTracker:
                     if res[1] >= self.cfg["mask_min_pts"] and np.linalg.norm(T1[:3, 3] - st.T[:3, 3]) < 0.03 and dang < 10:
                         T_new = np.linalg.inv(G) @ T1
                         a_ = self.cfg["held_blend_mask"]
+                        if depth_observation:a_=min(a_,.03)
                         Tb = st.T_grip_obj.copy()
                         Tb[:3, 3] = (1 - a_) * Tb[:3, 3] + a_ * T_new[:3, 3]
                         U, _, Vt = np.linalg.svd((1 - a_) * Tb[:3, :3] + a_ * T_new[:3, :3])
@@ -623,7 +624,7 @@ class MeshTracker:
             views=adapted
         if os.environ.get("REALPC_SIL_METHOD", "adam") == "contour":
             from .joint_pose import refine_contours
-            return refine_contours(o, T, views, robot_z, lid, alternatives)
+            return refine_contours(o, T, views, robot_z, lid, alternatives,rounds=6 if self.cfg["depth_mesh"] else 3)
         from .diffcalib import se3_exp, soft_iou
         data = []
         for vi, v in enumerate(views):
