@@ -46,7 +46,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     files = [f for f in sorted(dataset.glob('*/episode_*.npz'))
              if f.stem.split('_')[-1].isdigit()]
-    totals, episodes, task_images, cloth_physics = {}, {}, {}, {}
+    totals, episodes, task_images, cloth_physics, depth_totals = {}, {}, {}, {}, {}
     for path in files:
         task, episode = path.parent.name, path.stem
         key = task + '/' + episode
@@ -61,13 +61,17 @@ def main():
         if task != 'greycloth':
             args = ['scripts/audit_v3.py', '--converted', str(path), '--scene-seg-dir', str(dataset),
                     '--reference-name', 'stream', '--assets', str(ROOT / 'assets/objects_v3'),
-                    '--every', str(1 if video else a.every), '--out', str(dest),
+                    '--depth-check', '--every', str(1 if video else a.every), '--out', str(dest),
                     '--visual', *map(str, picks)]
             if video:
                 args += ['--video']
             run(args, dest / 'audit.log')
             result = json.loads((dest / 'metrics.json').read_text())
             episodes[key] = result['summary']
+            for name, rows in result.get('depth_per_frame', {}).items():
+                entry = depth_totals.setdefault(name, dict(rows=[], episodes=[]))
+                entry['rows'].extend(rows)
+                entry['episodes'].append(key)
             for mode, objects in result['per_frame'].items():
                 for name, rows in objects.items():
                     entry = totals.setdefault(mode, {}).setdefault(name, dict(scores=[], episodes=[], episode_pass=[]))
@@ -145,7 +149,15 @@ def main():
                 mean_episode_pass=float(np.mean(entry['episode_pass'])))
     for task, images in task_images.items():
         sheet(images, output / (task + '_contact_sheet.jpg'), columns=4)
+    depth_summary = {}
+    for name, entry in depth_totals.items():
+        good = [r for r in entry['rows'] if r['pass_depth'] is not None]
+        depth_summary[name] = dict(episodes=len(set(entry['episodes'])),
+            frames_with_valid_depth=len(entry['rows']), comparable_frames=len(good),
+            pass_fraction=float(np.mean([r['pass_depth'] for r in good])) if good else None,
+            median_mm=float(np.median([r['median_mm'] for r in good])) if good else None)
     report = dict(aggregate=aggregate, episodes=episodes, cloth_physics=cloth_physics, every=a.every,
+        depth_agreement=depth_summary,
         sampling='Rigid: requested stride plus five spread-out frames; example videos audit every frame. Cloth: every frame.',
         note='Stream consistency is not independent accuracy. Independent labels exist only for selected episodes. Cloth camera audit uses every-frame causal SAM reference masks; folds remain approximate.')
     (output / 'alignment_summary.json').write_text(json.dumps(report, indent=2))
@@ -154,6 +166,14 @@ def main():
         lines += ['## ' + mode, '', '| Object/view | Episodes | Frames | Frame pass | Mean episode pass | Median IoU |', '|---|---:|---:|---:|---:|---:|']
         for name, row in sorted(rows.items()):
             lines.append(f"| {name} | {row['episodes']} | {row['sampled_frames']} | {100*row['pass_iou_0_5']:.1f}% | {100*row['mean_episode_pass']:.1f}% | {row['median_iou']:.3f} |")
+        lines.append('')
+    if depth_summary:
+        lines += ['## Raw-depth agreement', '',
+            'Current depth, excluding closer occluders: at least60 comparable pixels; pass median error<=10mm and free-space fraction<=20% (15mm gate). This checks surface placement, not semantic identity or hidden pose.', '',
+            '| Object/view | Episodes | Comparable frames | Pass | Median error (mm) |', '|---|---:|---:|---:|---:|']
+        for name, values in sorted(depth_summary.items()):
+            if values['pass_fraction'] is not None:
+                lines.append(f"| {name} | {values['episodes']} | {values['comparable_frames']} | {100*values['pass_fraction']:.1f}% | {values['median_mm']:.2f} |")
         lines.append('')
     for key, physics in cloth_physics.items():
         lines += ['## Cloth limitations: ' + key, '',

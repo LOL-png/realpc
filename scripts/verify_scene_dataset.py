@@ -118,6 +118,7 @@ def main():
         manifest['alignment_checks'] = [dict(episode=key, results=value)
                                         for key, value in report['episodes'].items()]
         manifest['alignment_summary'] = report['aggregate']
+        manifest['depth_agreement'] = report.get('depth_agreement', {})
         manifest['alignment_note'] = report['note']
     temp = root / 'manifest.tmp.json'
     temp.write_text(json.dumps(manifest, indent=2))
