@@ -146,6 +146,9 @@ class MeshTracker:
                         sil_min_px=40, sil_min_gain=0.01, cam_equal_weight=os.environ.get("REALPC_CAM_EQUAL", "0") == "1",
                         max_corr=0.03, free_tol=0.015, min_inl=40, move_gate=0.003, flow=True)
         self.cfg.update(cfg or {})
+        self.cfg["depth_mesh"] = os.environ.get("REALPC_DEPTH_MESH","0")=="1"
+        if self.cfg["depth_mesh"]:
+            self.cfg.update(sil_refine=False,flow=False)
         self.prev = None                            # previous tick's views (for flow / track Kabsch)
         self.tick = -1
         self.previous_grip = {}
@@ -178,6 +181,7 @@ class MeshTracker:
     def step(self, t, views: list, q: dict, T_world_base: dict, aux_views=None):
         """views: list of CamView for this tick (cameras whose content time ~ t). Returns {name: T_world_obj}."""
         self.tick = t
+        if self.cfg["depth_mesh"]:self.cfg["sil_refine"]=any(v.labels is not None for v in views)
         rob = self.robot(q, T_world_base)
         # robot z-buffers per view (occlusion)
         robot_z = []
@@ -244,6 +248,10 @@ class MeshTracker:
                 lab[(lab==lid)&foreground]=254
                 # Material identity + preceding/FK pose gates the added bristles.
                 lab[green]=lid;v.labels=lab
+        if self.cfg["depth_mesh"]:
+            for st in self.state.values():
+                if st.carrier is not None and st.T_car_obj is not None:
+                    st.T=self.state[st.carrier].T@st.T_car_obj
         # object z-buffers (inter-object occlusion), with predicted poses
         obj_z = {}
         for name, st in self.state.items():
@@ -253,7 +261,11 @@ class MeshTracker:
             Tt = torch.tensor(st.T, dtype=torch.float32, device="cuda")
             Vw = o.verts_t @ Tt[:3, :3].T + Tt[:3, 3]
             obj_z[name] = [v.zbuf(Vw, o.faces_t).cpu().numpy() for v in views]
+        if self.cfg["depth_mesh"]:
+            from .depth_masks import associate_depth
+            associate_depth(self,views,robot_z,obj_z)
         out = {}
+        self.depth_contact={}
         Rv = torch.cat([r["V"] for r in rob.values()]).cpu().numpy()[::7]
         prevT = {n: (st.history[-1] if st.history else st.T).copy() for n, st in self.state.items()}
         moved = {}                                                   # objects already updated this tick: delta pose
@@ -273,6 +285,7 @@ class MeshTracker:
             Pw = (st.T[:3, :3] @ o.samples.T).T + st.T[:3, 3]
             tree = cKDTree(Pw)
             near_robot = tree.query(Rv, distance_upper_bound=self.cfg["contact"])[0].min() < self.cfg["contact"]
+            self.depth_contact[name]=near_robot
             # object-object contact: a neighbour that moved this tick may push / carry this object
             carriers = []
             for other, dT in moved.items():
@@ -306,6 +319,14 @@ class MeshTracker:
             st.mode = ("+".join(v.name for v, m_ in zip(views, Ms) if len(m_) >= self.cfg["cam_min_pts"]) or
                        ("fk" if st.held is not None else ("carrier" if st.carrier is not None else "hold")))
             mask_prediction = st.T.copy()
+            if self.cfg["depth_mesh"] and all(getattr(v,"depth_generated",False) for v in views) and st.held is None and st.carrier is None and not near_robot and not carriers:
+                # A resting object should not chase depth noise or slide along an
+                # underconstrained plane. Current ray evidence still detects loss.
+                if len(M):
+                    dd=o.tree.query((M-st.T[:3,3])@st.T[:3,:3])[0]
+                    st.last_res=(float(np.median(dd)),len(dd))
+                else:st.last_res=(np.nan,0)
+                st.mode="rest_depth";moved[name]=np.eye(4);out[name]=st.T.copy();st.history.append(st.T.copy());continue
             if len(M) >= self.cfg["mask_min_pts"] and st.held is None:
                 nearest = cKDTree(o.samples @ st.T[:3,:3].T + st.T[:3,3]).query(M)[0]
                 if np.median(nearest) > .035 and (st.carrier is not None or st.lost >= 2):
@@ -450,7 +471,7 @@ class MeshTracker:
             moved[name] = st.T @ np.linalg.inv(prevT[name])
             out[name] = st.T.copy()
             st.history.append(st.T.copy())
-        if "broom" in self.objs and os.environ.get("REALPC_BROOM_MATERIAL","0")=="1":
+        if "broom" in self.objs and os.environ.get("REALPC_BROOM_MATERIAL","0")=="1" and (not self.cfg["depth_mesh"] or ((t-self.first_tick)%4==0 and (self.state["broom"].held is not None or self.depth_contact.get("broom",False) or t==self.first_tick))):
             from .broom_refine import BroomRefiner
             if not hasattr(self,"broom_refiner"):self.broom_refiner=BroomRefiner(self.objs["broom"])
             extras=aux_views or [];extra_z=[]
@@ -644,6 +665,7 @@ class MeshTracker:
         KD-tree), Huber; right-multiplied update in the object frame. -> T, (median |r|, n)"""
         T = T.copy()
         res = (np.nan, 0)
+        if self.cfg["depth_mesh"]:iters=min(iters,5)
         for it in range(iters):
             Ti = np.linalg.inv(T)
             Mo = M @ Ti[:3, :3].T + Ti[:3, 3]

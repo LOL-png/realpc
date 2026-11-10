@@ -34,10 +34,14 @@ ap.add_argument("--cloth_tracks", default=os.path.expanduser("~/point_tracker/re
 ap.add_argument("--cloth_valid_until", type=int, default=160, help="cloth v1 is valid before the fold (report table)")
 ap.add_argument("--skip_existing", action="store_true")
 ap.add_argument("--preview-every",type=int,default=0,help="save atomic partial pose snapshots for quick visual validation")
+ap.add_argument("--depth-mesh",action="store_true",help="depth/mesh tracking; SAM only at initialization or failed-fit recovery")
 ap.add_argument("--online-seg", action="store_true", help="run the same current-frame segmenter used live instead of replaying cached masks")
 ap.add_argument("--sam-ckpt",default="/home/howardji/realpc/.model_cache/sam2/sam2.1_hiera_small.pt")
 ap.add_argument("--seg_dir", default=os.path.expanduser("~/data_ext/realpc_v4/seg"), help="causal object masks (segment_objects.py)")
 a = ap.parse_args()
+if a.depth_mesh:
+    if a.online_seg:ap.error("--depth-mesh and --online-seg are separate modes")
+    os.environ["REALPC_DEPTH_MESH"]="1"
 
 cfg = load_config(os.path.join(ROOT, "configs", "yam_bimanual.json")); r = cfg["robot"]
 tarm = TorchArm(os.path.join(cfg["_dir"], r["urdf"]), r["arm_joints"], r["finger_joints"])
@@ -62,8 +66,11 @@ for epp in a.episodes:
     lib = os.path.join(a.assets, ep.task)
     if not os.path.isdir(lib):
         lib = os.path.join(a.out_dir, "_empty_lib"); os.makedirs(lib, exist_ok=True)
-    conv = StreamConverter(ep, cal, tarm, arms, lib, start=a.start, cold=a.cold, seg_dir=a.seg_dir)
-    segmenter=None
+    conv = StreamConverter(ep, cal, tarm, arms, lib, start=a.start, cold=a.cold, seg_dir=None if a.depth_mesh else a.seg_dir)
+    segmenter=None;depth_pipeline=None
+    if a.depth_mesh:
+        from realpc.depth_pipeline import DepthMeshPipeline
+        depth_pipeline=DepthMeshPipeline(conv,a.sam_ckpt)
     if a.online_seg:
         from sam2.build_sam import build_sam2_video_predictor
         from realpc.online_masks import OnlineObjectSegmenter
@@ -71,7 +78,7 @@ for epp in a.episodes:
         conv.seg={};segmenter=OnlineObjectSegmenter(conv,model)
     os.makedirs(os.path.dirname(out_p),exist_ok=True)
     source_files=list(Path(ROOT,"realpc").glob("*.py"))+[Path(a.calib)]+list(Path(lib).glob("*.ply"))+list(Path(lib).glob("*.json"))
-    run_manifest={"commit":commit,"initialization":"current RGB-D","online_seg":a.online_seg,"start":a.start,"code_asset_sha256":{str(p.relative_to(Path(ROOT).resolve())) if p.is_relative_to(Path(ROOT).resolve()) else str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in source_files},"settings":{k:os.environ.get(k) for k in ["REALPC_SIL","REALPC_CAM_EQUAL","REALPC_SIL_METHOD","REALPC_COLD_COMPONENTS","REALPC_BROOM_MATERIAL","REALPC_BROOM_CLEAN_MASK","REALPC_BROOM_HOLE","REALPC_WRIST_WEIGHT","REALPC_BROOM_REJECT_BG"]}}
+    run_manifest={"commit":commit,"initialization":"current RGB-D","online_seg":a.online_seg,"depth_mesh":a.depth_mesh,"start":a.start,"code_asset_sha256":{str(p.relative_to(Path(ROOT).resolve())) if p.is_relative_to(Path(ROOT).resolve()) else str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in source_files},"settings":{k:os.environ.get(k) for k in ["REALPC_SIL","REALPC_CAM_EQUAL","REALPC_SIL_METHOD","REALPC_COLD_COMPONENTS","REALPC_BROOM_MATERIAL","REALPC_BROOM_CLEAN_MASK","REALPC_BROOM_HOLE","REALPC_WRIST_WEIGHT","REALPC_BROOM_REJECT_BG"]}}
     json.dump(run_manifest,open(out_p[:-4]+"_run.json","w"),indent=2)
     T_total = len(ep.low["t_cap"]); stop = min(a.stop or T_total, T_total)
     ticks = np.arange(a.start, stop)
@@ -87,15 +94,18 @@ for epp in a.episodes:
     obj_T = np.full((P, len(ticks), 4, 4), np.nan, np.float32); obj_res = np.full((P, len(ticks), 2), np.nan, np.float32)
     obj_held = np.zeros((P, len(ticks)), np.int8)
     obj_support = np.zeros((P, len(ticks), 2), np.int32); obj_mode = np.full((P, len(ticks)), "", dtype="<U16")
-    broom_diagnostics=[]
+    broom_diagnostics=[];step_times=[];input_times=[]
     qL = np.zeros((len(ticks), 7)); qR = np.zeros((len(ticks), 7))
     for k, t in enumerate(ticks):
+        input_start=time.perf_counter()
         frames = {}
         for c in cams:
             _, D = ds[c].next(); ok, im = caps[c].read()
             frames[c] = (D.astype(np.float32) * sc[c], im)
+        input_times.append(time.perf_counter()-input_start);step_start=time.perf_counter()
         labels=segmenter.step(int(t),frames) if segmenter is not None else None
-        o = conv.step(int(t), frames,labels=labels)
+        o = depth_pipeline.step(int(t),frames) if depth_pipeline is not None else conv.step(int(t), frames,labels=labels)
+        step_times.append(time.perf_counter()-step_start)
         if hasattr(conv.trk,"broom_refiner"):broom_diagnostics.append({"tick":int(t),**conv.trk.broom_refiner.stats})
         if k % 50 == 0:
             print(f"{ep.task}/{ep.name} tick={t} elapsed={time.time()-t0:.1f}s", flush=True)
@@ -157,6 +167,8 @@ for epp in a.episodes:
                           "res_p90_mm": float(np.nanpercentile(obj_res[i, :, 0], 90) * 1000) if np.isfinite(obj_res[i, :, 0]).any() else None,
                           "held_ticks": int((obj_held[i] > 0).sum()),
                           "max_disp_mm": max_displacement_mm(obj_T[i])} for i, n in enumerate(names)}}
+    qa["timing"]={"step_seconds":sum(step_times),"step_fps":len(step_times)/sum(step_times),"steady_median_ms":float(np.median(step_times[1:])*1000),"steady_p90_ms":float(np.percentile(step_times[1:],90)*1000),"input_seconds":sum(input_times),"end_to_end_fps":len(ticks)/qa["seconds"]}
+    if depth_pipeline is not None:qa["depth_pipeline"]=depth_pipeline.summary()
     json.dump(qa, open(out_p[:-4] + "_qa.json", "w"), indent=1)
     print(json.dumps(qa), flush=True)
 json.dump(SCHEMA, open(os.path.join(a.out_dir, "schema.json"), "w"), indent=1)

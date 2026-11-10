@@ -154,7 +154,9 @@ def render_seeds(conv,c,shape,q):
 
 class OnlineObjectSegmenter:
     """Feed one current packet; returns current top/side labels for StreamConverter."""
-    def __init__(self,conv,model):self.conv,self.model,self.memory=conv,model,{}
+    def __init__(self,conv,model,reset_tracker_on_seed=True):
+        self.conv,self.model,self.memory=conv,model,{}
+        self.reset_tracker_on_seed=reset_tracker_on_seed
     def step(self,t,frames,q=None):
         conv=self.conv;first_packet=not self.memory
         if q is None:q={a:conv.cal.q_at(conv.ep,a,conv.cal.robot_tick(conv.ep,'top',t)) for a in ['left','right']}
@@ -167,7 +169,7 @@ class OnlineObjectSegmenter:
                 seeds,zbufs,ids=render_seeds(conv,c,image.shape[:2],q);colors={i+1:conv.trk.lib_points[o.name][1] for i,o in enumerate(conv.objs)}
                 self.memory[c]=ObjectMaskStream(self.model,image,seeds,zbufs,ids,D,cold=conv.cold,image_refine=True,reference_colors=colors)
             out[c]=self.memory[c].step(image)
-        if first_packet:
+        if first_packet and self.reset_tracker_on_seed:
             # Cached replay initializes from these same current masks. The live
             # geometry-only pose was a seed, not an emitted tracker state.
             conv.trk=None
