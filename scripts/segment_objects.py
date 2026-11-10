@@ -106,7 +106,7 @@ for c in ("top", "side"):
         if m.sum() >= 40:
             seeds[oid] = m
     labels = np.zeros((len(ims), h, w), np.uint8)
-    tmp = os.path.join(a.out_dir, "_single"); os.makedirs(tmp, exist_ok=True)
+    tmp = os.path.join(a.out_dir, "_single", ep.task + "_" + ep.name + "_" + c); os.makedirs(tmp, exist_ok=True)
     cv2.imwrite(os.path.join(tmp, "000000.jpg"), ims[0])
     with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
         state = model.init_state(tmp, offload_video_to_cpu=True, offload_state_to_cpu=True)
