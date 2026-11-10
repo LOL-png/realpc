@@ -2,7 +2,7 @@
 
 Units: metres. Object coordinates retain the original v1 reference frames, so pose matrices have the same interpretation. Calibration is fixed at `configs/calib_yam_rig_v3.json` (including three-tick lag).
 
-Models: rounded thin dustpan tray with integral hollow handle; curved hand-broom body with hanging hole and a bristle envelope; four stacked wooden blocks; hollow lathed mug with continuous swept handle; peg stand with rounded base and four thin pegs.
+Models: rounded thin dustpan tray with integral hollow handle; curved hand-broom body with hanging hole and a bristle envelope; four stacked wooden blocks; hollow lathed mug with continuous swept handle; peg stand with rounded base and four individually fitted angled pegs at two heights.
 
 These are parametric/outline reconstructions fitted to observed clouds and initial RGB-D silhouettes from both cameras. Hidden backs, underside, wall thicknesses, the mug interior thickness, upper pole completion, peg caps and individual bristle structure are priors, not measured scans. Bristles use an envelope with sub-mm bundle ridges. Separate intersecting watertight components represent assemblies; not all meshes are a single boolean-unioned manufacturing solid.
 
@@ -30,3 +30,5 @@ Cold localization optionally uses `sweep/grasp_priors.json`: fixed hypotheses ex
 Final `.ply` files are authoritative. `build_smooth_v3.py` builds initial shapes; subsequent `quick_fit_v3.py` fits and the mug-handle repair are logged per iteration. Running the initial builder alone does not reproduce the final fitted library.
 
 Review artifacts: `/home/howardji/point_tracker/reports/ASTRA_Q29_1109/`. Videos show raw RGB beside rendered outlines with robot/object and current-depth scene occlusion. Scoring retains the original robot/object-only visibility convention; scene-depth occlusion affects display only. Independent Q28 masks are SAM-derived estimates, not manual ground truth. Thin bristles, hidden surfaces, rapid releases, and strong occlusion remain approximate.
+
+Stand revision v3.1 (Q30): four observed peg ends, two per height, verified across both fixed cameras and wrist views. Replaces two straight through-bars with four independent arms; restores the previously shortened upper +y arm. Static mesh fitting uses top/side depth throughout hang; online pose estimation remains causal. Evidence and new validation: `/home/howardji/point_tracker/plans/ASTRA_Q30_CLOTH_LOG_1109.md`. Prior Q29 stand metrics refer to the earlier mesh.

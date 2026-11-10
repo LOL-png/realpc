@@ -3,14 +3,14 @@
   "name": "stand",
   "created": "2026-11-09T01:58:20",
   "watertight": true,
-  "volume_m3": 0.00035354078578340005,
+  "volume_m3": 0.0003645822537730326,
   "extents_m": [
-    0.17673803865909576,
-    0.16311325877904892,
-    0.2562342658638954
+    0.1836671213758372,
+    0.18089777354156095,
+    0.25455944861301527
   ],
-  "n_vertices": 966,
-  "n_faces": 1920,
+  "n_vertices": 1162,
+  "n_faces": 2304,
   "fused_points": 6753,
   "frame": "object frame = mesh centroid, axes parallel to the world (left arm base) frame of the reference episode at its first tick",
   "T_world_obj_ref": [
@@ -83,31 +83,31 @@
   ],
   "n_scans": 1,
   "surf_res_med_mm_all": 3.4207259042682474,
-  "version": "v3 smooth prior + shared-two-camera t0 fit",
+  "version": "v3.1 four individual pegs + two-camera mask/depth refit",
   "refine_views": 60,
   "refine_tracks": [
     "/home/howardji/data_ext/realpc_v4/trk/hang0_stand_static.npz"
   ],
   "unseen_geometry": "Prior-completed: backs, wall thickness, hidden peg and handle sections. Not measured surfaces.",
-  "fit_source": "v1 measured cloud dimensions + initial two-camera RGB; canonical v1 frame retained",
+  "fit_source": "Canonical stand depth from top/side every20 frames; visual peg census with wrist views. Static asset fitting only.",
   "mesh_fit_transform": [
     [
-      0.9989117980003357,
-      0.03569946438074112,
-      -0.030012262985110283,
-      0.0019420263124629855
+      0.999504029750824,
+      0.028675690293312073,
+      0.01301505882292986,
+      0.0030784751288592815
     ],
     [
-      -0.03577466309070587,
-      0.9993579387664795,
-      -0.0019720953423529863,
-      -0.0027695223689079285
+      -0.028724469244480133,
+      0.999580979347229,
+      0.0035762819461524487,
+      0.0014413401950150728
     ],
     [
-      0.029922587797045708,
-      0.0030436560045927763,
-      0.9995476007461548,
-      0.0035285665653645992
+      -0.012907049618661404,
+      -0.003948371857404709,
+      0.9999089241027832,
+      -0.0015694149769842625
     ],
     [
       0.0,
@@ -117,10 +117,99 @@
     ]
   ],
   "mesh_fit_scale": [
-    1.0348809957504272,
-    1.0143423080444336,
-    0.9681150317192078
+    1.0079128742218018,
+    1.0186233520507812,
+    0.9972308874130249
   ],
   "fit_masks": "causal SAM2 t0 only; no Q28 evaluation masks",
-  "fit_views": "initial RGB-D, both fixed cameras; causal/image-refined masks, no Q28 masks"
+  "fit_views": "initial RGB-D, both fixed cameras; causal/image-refined masks, no Q28 masks",
+  "peg_count": 4,
+  "peg_levels": 2,
+  "pegs": [
+    {
+      "name": "lower_minus_x",
+      "root": [
+        0.0036065296826004113,
+        -0.0012848323718029847,
+        0.03791242177838897
+      ],
+      "tip": [
+        -0.09238693144283343,
+        0.012906983154170246,
+        0.04708596857978449
+      ],
+      "length_m": 0.09746951404249858,
+      "radius_m": 0.0049052649609923095,
+      "azimuth_deg": 171.5902250786061,
+      "elevation_deg": 5.400504976446309,
+      "root_height_m": 0.03791242177838897,
+      "support_voxels": 2158,
+      "surface_error_median_mm": 1.4708155464215016,
+      "radius_note": "Before small anisotropic global mask/depth refit; see mesh_fit_scale"
+    },
+    {
+      "name": "lower_plus_x",
+      "root": [
+        0.003082447865480772,
+        -0.001237607283274484,
+        0.04803456895569729
+      ],
+      "tip": [
+        0.08903547702827318,
+        -0.013282020908915521,
+        0.06839731889715799
+      ],
+      "length_m": 0.08914949639242964,
+      "radius_m": 0.005165733847513841,
+      "azimuth_deg": -7.976795011280506,
+      "elevation_deg": 13.20355476580054,
+      "root_height_m": 0.04803456895569729,
+      "support_voxels": 2144,
+      "surface_error_median_mm": 1.612510890517358,
+      "radius_note": "Before small anisotropic global mask/depth refit; see mesh_fit_scale"
+    },
+    {
+      "name": "upper_minus_y",
+      "root": [
+        -0.001295422015821078,
+        -0.000843116793512769,
+        0.1325890064769032
+      ],
+      "tip": [
+        -0.00811103937631466,
+        -0.08787542329271936,
+        0.14940768836753965
+      ],
+      "length_m": 0.08890412293653721,
+      "radius_m": 0.0050520516786103494,
+      "azimuth_deg": -94.4777711678688,
+      "elevation_deg": 10.904802491848947,
+      "root_height_m": 0.1325890064769032,
+      "support_voxels": 3177,
+      "surface_error_median_mm": 1.446637252368912,
+      "radius_note": "Before small anisotropic global mask/depth refit; see mesh_fit_scale"
+    },
+    {
+      "name": "upper_plus_y",
+      "root": [
+        -0.0008698733797645663,
+        -0.0008814630428091138,
+        0.12436993497974516
+      ],
+      "tip": [
+        -0.002689026218353982,
+        0.0913006140049159,
+        0.13548293967637293
+      ],
+      "length_m": 0.0928673436643373,
+      "radius_m": 0.005186824426770586,
+      "azimuth_deg": 91.13054788818894,
+      "elevation_deg": 6.8727903181973815,
+      "root_height_m": 0.12436993497974516,
+      "support_voxels": 2369,
+      "surface_error_median_mm": 1.5005342218156703,
+      "radius_note": "Before small anisotropic global mask/depth refit; see mesh_fit_scale"
+    }
+  ],
+  "peg_evidence": "hang full-episode top/side and both wrist views: 4 exposed ends at 2 heights; distinct angled arms, not 2 straight crossbars"
 }
