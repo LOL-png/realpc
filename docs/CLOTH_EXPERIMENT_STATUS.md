@@ -1,3 +1,24 @@
+# Single-layer comparison, 2026-11-10
+
+Single-sheet91 completes453 frames; still experimental and **not physically accepted**. Frame0 shirt outline is one connected sheet (712vertices/1331faces); causal code/shared live-conversion factory preserved. First-fold160:250 rendered-depth median top/side6.62/10.14mm vs best fully audited complete two-layer52b18.65/16.76. Held-out CoTracker11.70/8.69px vs16.63/11.58 (top view median only3 surviving held tracks). IoU improves.762/.837 vs.708/.825.
+
+Worst edge extension instead worsens239.9% vs102.1%; second-fold FK contact-center lag240.7mm vs9.6. Stronger strain93 and corner-grasp94 pilots failed; stopped at checkpoints. Current-code two-layer92 first-lift control also failed and was stopped. Main91 is complete, these three diagnostics are partial. No tracker jobs left running.
+
+91 runtime float64 contact flags are0/453; its original float32 export flags53 frames. At149 a <=30nm rounding difference turns an intersection-free state into a flagged crossing. Export now retains float64 (f20af0c); lossless compressed disk round trip at149 verified exact and intersection-free. Historical91 export is retained unchanged and is not certified collision-free. Do not promote to dataset_v2.
+
+Full report, matching audits, template, first-frame fit and453-frame H264 both-camera video:
+`/home/howardji/point_tracker/reports/ASTRA_Q30_1110/single_layer_review/README.md`
+Trajectory/config/provenance:
+`/home/howardji/data_ext/astra_cloth/shirt91/full/`
+Iteration log:
+`/home/howardji/point_tracker/plans/ASTRA_Q30_CLOTH_LOG_1109.md`
+
+Topology, fixed rest/sample IDs, current-frame order, collision filter, tilted table and exact live/conversion prefix tests passed. All453 cached CoTracker packets declare zero lookahead with current tick. Main91 takes634.6s with cached inputs (~0.71fps); this excludes SAM/CoTracker generation. Geometry sizes remain t0-inferred, not measured. Master/downstream work stays paused; nothing pushed.
+
+Previous status follows for provenance.
+
+---
+
 # Clean shirt tracker: experimental, not accepted
 
 Work remains isolated on `astra-cloth`. Master, dataset conversion, and encoder evaluation are paused.
