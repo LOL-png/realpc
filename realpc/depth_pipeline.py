@@ -8,7 +8,7 @@ class DepthMeshPipeline:
         os.environ['REALPC_DEPTH_MESH']='1'
         self.converter=converter;converter.seg={}
         self.checkpoint=sam_checkpoint;self.model=None;self.events=[]
-        self.bad={};self.pending=[];self.last_recovery={};self.timings=[]
+        self.bad={};self.pending=[];self.last_recovery={};self.timings=[];self.last_health={}
 
     def _sam(self,t,frames,q,initial):
         start=time.perf_counter();c=self.converter
@@ -32,7 +32,7 @@ class DepthMeshPipeline:
         labels=sampler.step(t,frames,q=q)
         for m in sampler.memory.values():self.model.reset_state(m.state)
         sampler.memory.clear()
-        self.events.append({'tick':int(t),'reason':'initialize' if initial else 'reacquire','objects':[o.name for o in c.objs] if initial else list(self.pending),'camera_calls':len(labels),'seconds':time.perf_counter()-start})
+        self.events.append({'tick':int(t),'reason':'initialize' if initial else 'reacquire','objects':[o.name for o in c.objs] if initial else list(self.pending),'trigger':{} if initial else {n:self.last_health.get(n,{}) for n in self.pending},'camera_calls':len(labels),'seconds':time.perf_counter()-start})
         return labels
 
     def step(self,t,frames,q=None):
@@ -47,6 +47,7 @@ class DepthMeshPipeline:
             if getattr(c.trk.objs[n],'passive_fixture',False):continue
             bad=d['visible']>=80 and (d['free_fraction']>.40 or d['support']<30)
             residual,count=st.last_res
+            self.last_health[n]={**d,'residual_mm':float(residual*1000) if np.isfinite(residual) else None,'residual_count':int(count),'mode':st.mode}
             bad |= d['visible']>=80 and count>=40 and np.isfinite(residual) and residual>.010
             self.bad[n]=self.bad.get(n,0)+1 if bad else 0
             if self.bad[n]>=3 and t-self.last_recovery.get(n,c.start)>=30:self.pending.append(n)
