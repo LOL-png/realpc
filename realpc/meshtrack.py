@@ -193,7 +193,7 @@ class MeshTracker:
         distance,j=cKDTree(surface).query(bottom)
         return bool(((distance<.012)&((surface[j]-bottom)@n<.005)).mean()>=.3)
 
-    def step(self, t, views: list, q: dict, T_world_base: dict, aux_views=None):
+    def step(self, t, views: list, q: dict, T_world_base: dict, aux_views=None, mask_provider=None):
         """views: list of CamView for this tick (cameras whose content time ~ t). Returns {name: T_world_obj}."""
         self.tick = t
         if self.cfg["depth_mesh"]:
@@ -280,7 +280,9 @@ class MeshTracker:
             Tt = torch.tensor(st.T, dtype=torch.float32, device="cuda")
             Vw = o.verts_t @ Tt[:3, :3].T + Tt[:3, 3]
             obj_z[name] = [v.zbuf(Vw, o.faces_t).cpu().numpy() for v in views]
-        if self.cfg["depth_mesh"]:
+        if mask_provider is not None:
+            mask_provider(t,views,rob,robot_z,obj_z)
+        elif self.cfg["depth_mesh"]:
             from .depth_masks import associate_depth
             associate_depth(self,views,robot_z,obj_z)
         out = {}

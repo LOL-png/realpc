@@ -3,7 +3,8 @@ import cv2
 import numpy as np
 
 
-def associate_depth(tracker, views, robot_z, object_z):
+def associate_depth(tracker, views, robot_z, object_z, config=None):
+    config=config or {}
     names=list(tracker.objs)
     diagnostics={n:{'visible':0,'free':0,'support':0} for n in names}
     for vi,v in enumerate(views):
@@ -17,9 +18,9 @@ def associate_depth(tracker, views, robot_z, object_z):
         P=C@v.Twc[:3,:3].T+v.Twc[:3,3]
         valid=(D>.1)&np.isfinite(D)
         if tracker.plane is not None:
-            n,d=tracker.plane;valid &= (P@np.asarray(n)+d)>.002
+            n,d=tracker.plane;valid &= (P@np.asarray(n)+d)>config.get('table_height_m',.002)
         rz=robot_z[vi]
-        robot=(rz<1e8)&((D<.1)|(rz<=D+.012))
+        robot=(rz<1e8)&((D<.1)|(rz<=D+config.get('robot_margin_m',.012)))
         valid &= ~robot
         rgb=cv2.cvtColor(cv2.resize(v.rgb,(w,h)),cv2.COLOR_BGR2RGB).reshape(-1,3)/255. if v.rgb is not None else None
         best=np.full((h,w),np.inf);labels=np.zeros((h,w),np.uint8);appearance={}
@@ -35,13 +36,13 @@ def associate_depth(tracker, views, robot_z, object_z):
             observable=visible&(D>=z-.015)
             diagnostics[name]['visible']+=int(observable.sum())
             diagnostics[name]['free']+=int((observable&(D>z+.025)).sum())
-            region=cv2.dilate(pred.astype(np.uint8),np.ones((13,13),np.uint8)).astype(bool)
+            region=cv2.dilate(pred.astype(np.uint8),np.ones((config.get('dilation_px',13),)*2,np.uint8)).astype(bool)
             idx=np.flatnonzero(region&valid)
             if not len(idx):continue
             Q=P.reshape(-1,3)[idx];L=(Q-st.T[:3,3])@st.T[:3,:3]
             dist,_=tracker.objs[name].tree.query(L)
             # Permit small prediction errors; a distant surface never attracts ICP.
-            usable=dist<.025
+            usable=dist<config.get('surface_gate_m',.025)
             color_cost=np.zeros(len(idx))
             if rgb is not None and tracker.lib_points is not None:
                 from .objlib import colour_model

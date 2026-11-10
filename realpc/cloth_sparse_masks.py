@@ -11,7 +11,8 @@ from .cloth_inputs import unproject, project
 from .cloth_seed import depth_seed
 
 class SparseClothMasks:
-    def __init__(self,checkpoint,interval=10,cameras=('top','side'),sam_backend='video',fast_neighbors=False):
+    def __init__(self,checkpoint,interval=10,cameras=('top','side'),sam_backend='video',fast_neighbors=False,health=None):
+        self.health=health or dict(min_area=100,min_area_ratio=.60,max_area_ratio=1.65,min_cross_support=150,min_cross_recall=.70)
         self.fast_neighbors=fast_neighbors
         self.checkpoint=checkpoint;self.interval=interval;self.cameras=cameras;self.sam_backend=sam_backend;self.video=None
         self.predictor=None;self.cloud=None;self.plane=None;self.previous=None
@@ -39,7 +40,7 @@ class SparseClothMasks:
             mm,_,_=self.predictor.predict(point_coords=np.array(points,np.float32),point_labels=np.ones(5,np.int32),box=box,multimask_output=False)
         return mm[0].astype(bool)
 
-    def step(self,t,frame,predicted_vertices=None):
+    def prepare(self,t,frame,predicted_vertices=None):
         assert t==self.tick+1,'Supply current packets in causal order'
         start=time.perf_counter();self.tick=t;robot=cKDTree(frame['robot'])
         if t==0:
@@ -81,7 +82,7 @@ class SparseClothMasks:
             if nc>1:
                 keep=np.flatnonzero(stats[:,4]>max(50,stats[1:,4].max()*.03));keep=keep[keep!=0];M=np.isin(L,keep).astype(np.uint8)
             area=int(M.sum());ratio=area/max(self.previous_area.get(cam,area),1)
-            failed=area<100 or ratio<.60 or ratio>1.65
+            failed=area<self.health['min_area'] or ratio<self.health['min_area_ratio'] or ratio>self.health['max_area_ratio']
             bad |= failed;diagnostics[cam]=dict(area=area,area_ratio=float(ratio),failed=bool(failed))
             masks[cam]=M.astype(bool)
         # Current cross-camera geometry is an independent reacquisition cue.
@@ -104,18 +105,13 @@ class SparseClothMasks:
                 seed=cv2.dilate(seed,np.ones((3,3),np.uint8))
             cross_seeds[cam]=seed.astype(bool)
             recall=float((seed.astype(bool)&masks[cam]).sum()/max(seed.sum(),1))
-            mismatch=seed.sum()>150 and recall<.70
+            mismatch=seed.sum()>self.health['min_cross_support'] and recall<self.health['min_cross_recall']
             diagnostics[cam].update(cross_support=int(seed.sum()),cross_recall=recall,cross_failed=bool(mismatch))
             bad |= mismatch
-        due=t==0 or (self.interval>0 and t-self.last_sam>=self.interval) or (bad and t-self.last_sam>=3)
-        calls=0
-        if due:
-            for cam in self.cameras:
-                seed=initial if t==0 and cam=='top' else (cross_seeds[cam] if diagnostics[cam]['cross_failed'] else masks[cam]|cross_seeds[cam])
-                if seed.sum()<20:continue
-                masks[cam]=self._sam(frame[cam+'_rgb'],seed,cam);calls+=1
-            if calls:
-                self.last_sam=t;self.events.append(dict(tick=t,reason='init' if t==0 else ('failure' if bad else 'periodic'),camera_calls=calls,diagnostics=diagnostics))
+        return dict(masks=masks,diagnostics=diagnostics,cross_seeds=cross_seeds,initial=initial if t==0 else None,bad=bad,start=start,robot=robot)
+
+    def finish(self,t,frame,proposal,masks,calls=0):
+        robot=proposal['robot'];diagnostics=proposal['diagnostics'];start=proposal['start']
         points=[]
         for cam in self.cameras:
             P,uv=unproject(frame[cam+'_depth'],frame[cam+'_K'],frame[cam+'_T'],2,masks[cam]);P=P[robot.query(P,workers=1,distance_upper_bound=.012000001 if self.fast_neighbors else np.inf)[0]>.012]
@@ -127,6 +123,20 @@ class SparseClothMasks:
         self.previous={k:frame[k].copy() for arm in ('left','right') for k in ('q_'+arm,'G_'+arm,'tips_'+arm)}
         elapsed=time.perf_counter()-start;self.timings.append(elapsed)
         return masks,dict(tick=t,sam_called=bool(calls),camera_calls=calls,seconds=elapsed,diagnostics=diagnostics,max_observed_tick=t)
+
+    def step(self,t,frame,predicted_vertices=None):
+        proposal=self.prepare(t,frame,predicted_vertices)
+        masks=proposal['masks'];diagnostics=proposal['diagnostics'];cross_seeds=proposal['cross_seeds'];initial=proposal['initial'];bad=proposal['bad']
+        due=t==0 or (self.interval>0 and t-self.last_sam>=self.interval) or (bad and t-self.last_sam>=3)
+        calls=0
+        if due:
+            for cam in self.cameras:
+                seed=initial if t==0 and cam=='top' else (cross_seeds[cam] if diagnostics[cam]['cross_failed'] else masks[cam]|cross_seeds[cam])
+                if seed.sum()<20:continue
+                masks[cam]=self._sam(frame[cam+'_rgb'],seed,cam);calls+=1
+            if calls:
+                self.last_sam=t;self.events.append(dict(tick=t,reason='init' if t==0 else ('failure' if bad else 'periodic'),camera_calls=calls,diagnostics=diagnostics))
+        return self.finish(t,frame,proposal,masks,calls)
 
     def summary(self):
         n=len(self.timings);calls=sum(e['camera_calls'] for e in self.events)

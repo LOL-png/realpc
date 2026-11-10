@@ -195,7 +195,7 @@ class StreamConverter:
         self.trk.bg_colors = C[idx][::3]                       # static-scene colours: negatives of the colour models
 
     # ------------------------------------------------------------------ per tick
-    def step(self, t, frames, labels=None, q=None):
+    def step(self, t, frames, labels=None, q=None, mask_provider=None):
         """Current RGB-D; optional current labels and calibrated, time-aligned joints.
         Live callers supply labels and q; file replay supplies identical values from
         causal SAM2 and joint history. q includes v3 offsets and the fixed 3-tick lag.
@@ -263,7 +263,7 @@ class StreamConverter:
             detail={"observed":bool(st.valid)}
             if st.valid:st.T,detail=update_box_pose(st.T,np.concatenate(pp),np.concatenate(cc),meta["dimensions_m"],meta.get("wall_planes"))
             self.box_diagnostic.update(detail)
-        poses = self.trk.step(t, views, q, self.T_world_base,aux_views=aux)
+        poses = self.trk.step(t, views, q, self.T_world_base,aux_views=aux,mask_provider=mask_provider)
         out = {"q": q, "robot_T": self.arms.link_poses(q).astype(np.float32), "obj_T": {}, "obj_res": {}, "obj_held": {}}
         for o in self.objs:
             st = self.trk.state[o.name]

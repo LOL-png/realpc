@@ -11,8 +11,20 @@ class Frames:
         im=cv2.resize(cv2.cvtColor(self.ims[i],cv2.COLOR_BGR2RGB),(self.size,self.size));x=torch.from_numpy(im).permute(2,0,1).float()/255
         return (x-torch.tensor([.485,.456,.406])[:,None,None])/torch.tensor([.229,.224,.225])[:,None,None]
 
+def refine_cloth_seed(predictor,seed,shape):
+    """Current depth-supported cloth prompt; shared multi-instance SAM encoder."""
+    h,w=shape;yy,xx=np.nonzero(seed)
+    if len(xx)<20:raise ValueError('Insufficient current cloth seed')
+    box=np.array([max(0,xx.min()-12),max(0,yy.min()-12),min(w-1,xx.max()+12),min(h-1,yy.max()+12)],np.float32)
+    dist=cv2.distanceTransform(seed.astype(np.uint8),cv2.DIST_L2,5);points=[];cand=np.c_[xx,yy]
+    for _ in range(5):
+        score=dist[yy,xx] if not points else np.minimum(dist[yy,xx],8)*np.min(np.linalg.norm(cand[:,None]-np.array(points)[None],axis=2),axis=1)
+        points.append(cand[score.argmax()])
+    mm,_,_=predictor.predict(point_coords=np.array(points,np.float32),point_labels=np.ones(len(points),np.int32),box=box,multimask_output=False)
+    return mm[0].astype(bool)
+
 class ObjectMaskStream:
-    def __init__(self,model,image,seeds,zbufs,ids,depth,cold=True,image_refine=True,debug_dir=None,reference_colors=None):
+    def __init__(self,model,image,seeds,zbufs,ids,depth,cold=True,image_refine=True,debug_dir=None,reference_colors=None,cloth_ids=()):
         self.model=model;self.images=[image.copy()];self.t=-1;self.temp=tempfile.TemporaryDirectory(prefix='realpc_masks_')
         cv2.imwrite(self.temp.name+'/000000.jpg',image);h,w=image.shape[:2]
         with torch.inference_mode(),torch.autocast('cuda',dtype=torch.bfloat16):
@@ -23,7 +35,10 @@ class ObjectMaskStream:
                 image_predictor=SAM2ImagePredictor(model)
                 image_predictor.set_image(cv2.cvtColor(image,cv2.COLOR_BGR2RGB))
             for oid, m in seeds.items():
-                if image_refine and oid < 254:
+                if image_refine and oid in cloth_ids:
+                    refined=refine_cloth_seed(image_predictor,m,image.shape[:2])
+                    model.add_new_mask(state,frame_idx=0,obj_id=int(oid),mask=refined)
+                elif image_refine and oid < 254:
                     # The renderer provides identity/location, not the final RGB silhouette.
                     # For a heavily occluded cold object, the visible seed may be only
                     # its neck. Use the amodal projected extent for the SAM box so the
