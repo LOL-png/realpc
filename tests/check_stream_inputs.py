@@ -16,6 +16,10 @@ seg=sys.argv[1];frames={};labels={}
 for c in ('top','side'):
  D=read_depth_frames(str(Path(ep.path)/(c+'_depth.mkv')),[t])[t].astype(np.float32)*float(ep.meta['depth_scale'][c]);cap=cv2.VideoCapture(ep.video(c));cap.set(cv2.CAP_PROP_POS_FRAMES,t);ok,im=cap.read();assert ok;cap.release();frames[c]=(D,im)
  z=np.load(Path(seg)/ep.task/(ep.name+'_'+c+'.npz'));labels[c]=z['labels'][t-int(z['start'])]
+ from realpc.v4 import load_library
+ names=[o.name for o in load_library(str(ROOT/'assets/objects_v3/sweep'),10)[0]];lookup=np.arange(256,dtype=np.uint8)
+ for i,n in enumerate(z['names'],1):lookup[i]=names.index(n)+1 if n in names else 0
+ labels[c]=lookup[labels[c]]
 q={a:cal.q_at(ep,a,cal.robot_tick(ep,'top',t)) for a in ('left','right')}
 results=[]
 for live in (False,True):

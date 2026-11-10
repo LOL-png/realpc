@@ -27,6 +27,7 @@ for cam in ['top','side']:
  for j,k in enumerate(ks):
   t=int(ticks[k]);zs=[]
   for o in obs:
+   if not d['obj_valid'][idx[o.name],k]:zs.append(np.zeros((R.H,R.W),np.float32));continue
    T=torch.tensor(d['obj_T'][idx[o.name],k],device='cuda');V=o.verts_t@T[:3,:3].T+T[:3,3];_,zz=R.raster((V@Tc[:3,:3].T+Tc[:3,3])[None],o.faces_t);zs.append(zz[0].cpu().numpy())
   rz=np.full((R.H,R.W),np.inf)
   for side in ['left','right']:

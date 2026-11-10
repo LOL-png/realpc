@@ -10,7 +10,7 @@ from scipy.spatial import cKDTree
 from scipy.spatial.transform import Rotation
 
 
-def refine_contours(o, T, views, robot_z, lid, alternatives=(), rounds=3):
+def refine_contours(o, T, views, robot_z, lid, alternatives=(), rounds=3, landmarks=()):
     data=[]
     for v,rz in zip(views,robot_z):
         if v.labels is None:continue
@@ -21,7 +21,7 @@ def refine_contours(o, T, views, robot_z, lid, alternatives=(), rounds=3):
         boundary=m&~cv2.erode(m.astype(np.uint8),np.ones((3,3),np.uint8)).astype(bool)
         safe=~cv2.dilate(ign.astype(np.uint8),np.ones((3,3),np.uint8)).astype(bool)
         yy,xx=np.nonzero(boundary&safe);target=np.c_[xx,yy][::max(1,len(xx)//250)]
-        data.append((v,m,valid,safe,sdf,target,min(1.,m.sum()/300)))
+        data.append((v,m,valid,safe,sdf,target,min(1.,m.sum()/300)*getattr(v,"measurement_weight",1.)))
     if not data:return None,0.,0.
     def render(Tn):
         V=o.verts_t@torch.tensor(Tn[:3,:3].T,dtype=torch.float32,device='cuda')+torch.tensor(Tn[:3,3],dtype=torch.float32,device='cuda')
@@ -60,6 +60,10 @@ def refine_contours(o, T, views, robot_z, lid, alternatives=(), rounds=3):
                 uv=project(P);r=map_coordinates(sdf,[uv[:,1],uv[:,0]],order=1,mode='nearest')
                 res.append(r/3*np.sqrt(wc/max(1,len(P))))
                 if len(Q):res.append(((project(Q)-target)/5*np.sqrt(.4*wc/len(Q))).ravel())
+            for local,uv_target,v,sigma in landmarks:
+                W=local@M[:3,:3].T+M[:3,3];C=W@v.Tcw[:3,:3].T+v.Tcw[:3,3]
+                uv=C[:2]/max(C[2],.05)*[v.K[0,0],v.K[1,1]]+[v.K[0,2],v.K[1,2]]
+                res.append((uv-uv_target)/sigma*.3)
             res.append(.07*x)
             return np.concatenate(res)
         fit=least_squares(residual,np.zeros(6),bounds=(-1.2,1.2),diff_step=1e-3,max_nfev=14,loss='soft_l1',f_scale=1.)

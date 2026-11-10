@@ -29,7 +29,7 @@ SCHEMA = {
     "robot_local": "[Nr,3] float32 link-frame surface samples (URDF meshes, fingers included)",
     "robot_body": "[Nr] int, index into robot_bodies", "robot_bodies": "[B] 'arm/link' names",
     "robot_T": "[T,B,4,4] float32 world (left arm base) pose of every robot link",
-    "obj_names": "[P]", "obj_local": "[No,3] float32 object-frame mesh samples", "obj_index": "[No] int object of each sample",
+    "obj_names": "[P]", "obj_static": "[P] optional bool; immutable library fixtures only (the movable tray is false)", "obj_local": "[No,3] float32 object-frame mesh samples", "obj_index": "[No] int object of each sample",
     "obj_color": "[No,3] uint8", "obj_T": "[P,T,4,4] float32 world pose", "obj_res": "[P,T,2] median |depth residual| (m), n",
     "obj_held": "[P,T] int8 0 none / 1 left / 2 right / 3 carrier", "obj_valid": "[P,T] bool (pose defined)",
     "static_points": "[Ns,3] float32 static scene (table region) at the first output tick", "static_color": "[Ns,3] uint8",
@@ -44,12 +44,16 @@ def load_library(lib_dir, n_samples=1500):
         meta = json.load(open(f[:-4] + ".json"))
         objs.append(LibObject(meta["name"], trimesh.load(f, process=False), n_samples=n_samples))
         metas[meta["name"]] = meta
+        objs[-1].metadata = meta
+        objs[-1].passive_fixture = bool(meta.get("passive_fixture", False))
     return objs, metas
 
 
 class StreamConverter:
-    def __init__(self, ep, cal, tarm, arms, lib_dir, start=0, cold=False, side_max_lag=2.5, static_voxel=0.008, seg_dir=None):
+    def __init__(self, ep, cal, tarm, arms, lib_dir, start=0, cold=True, side_max_lag=2.5, static_voxel=0.008, seg_dir=None):
         """ep: Episode (intrinsics, table region, recorded low_dim); cal: RigCalib; tarm: TorchArm; arms: BimanualArms."""
+        # Tested production defaults; explicit environment values retain ablation support.
+        for key,value in {"REALPC_SIL":"1","REALPC_CAM_EQUAL":"1","REALPC_SIL_METHOD":"contour","REALPC_COLD_COMPONENTS":"1","REALPC_BROOM_MATERIAL":"1","REALPC_BROOM_CLEAN_MASK":"0","REALPC_BROOM_HOLE":"0","REALPC_WRIST_WEIGHT":"1","REALPC_BROOM_REJECT_BG":"0"}.items():os.environ.setdefault(key,value)
         self.ep, self.cal, self.tarm, self.arms = ep, cal, tarm, arms
         self.T_world_base = {"left": np.eye(4), "right": cal.T_world_rb()}
         self.arms.T_base["right"] = self.T_world_base["right"]
@@ -71,7 +75,10 @@ class StreamConverter:
                 if os.path.exists(p):
                     z = np.load(p)
                     if int(z["start"]) <= start:
-                        self.seg[c] = (z["labels"], int(z["start"]))
+                        old_names=list(z["names"]); new_names=[o.name for o in self.objs]
+                        lookup=np.arange(256,dtype=np.uint8)
+                        for i,n in enumerate(old_names,1):lookup[i]=new_names.index(n)+1 if n in new_names else 0
+                        self.seg[c] = (lookup[z["labels"]], int(z["start"]))
 
     # ------------------------------------------------------------------ first tick: object poses + static scene
     def _init(self, t, frames, q=None, labels=None):
@@ -79,6 +86,7 @@ class StreamConverter:
         Ps, Cs = [], []
         region = json.load(open(os.path.join(self.ep.path, "table_region.json")))
         for c, (D, im) in frames.items():
+            if c not in ("top","side"):continue
             P, C, _, _ = objlib.depth_points(D, im, self.ep.intrinsics(c), self.cal.T_world_cam(c), stride=2)
             k = objlib.table_crop(P, region, *self.ep.table_plane(), above=-0.01)
             Ps.append(P[k]); Cs.append(C[k])
@@ -90,10 +98,16 @@ class StreamConverter:
         candidate_free = objlib.robot_free(P, self.arms.points(q), .015)
         for o in self.objs:
             T0 = None
-            if not self.cold and t == 0:
-                for sc in self.metas[o.name]["scans"]:
-                    if sc["episode"] == self.key:
-                        T0 = np.asarray(sc["T_world_obj_t0"], float)
+            if getattr(o,"passive_fixture",False):
+                from .box_fixture import fit_box,refine_box_pose
+                try:
+                    T0,_,Q,_,detail=fit_box(P,C)
+                    T0,quality=refine_box_pose(T0,Q@T0[:3,:3].T+T0[:3,3],self.metas[o.name]["dimensions_m"])
+                    o.initial_valid=True;self.init_info[o.name]={"current_frame_geometry":True,**detail,**quality}
+                except ValueError as error:
+                    # An occluded tray is unknown, not an episode-specific pose prior.
+                    T0=np.eye(4);o.initial_valid=False
+                    self.init_info[o.name]={"current_frame_geometry":False,"unobserved":str(error)}
             if T0 is None:
                 pts = np.load(os.path.join(self.lib_dir, f"{o.name}_points.npz"))
                 Pl, Cl = pts["P"].astype(float), pts["C"].astype(float)
@@ -110,6 +124,7 @@ class StreamConverter:
                     # Replay/live masks, when supplied, refer only to this first tick.
                     measured=[]
                     for camera,(D,image) in frames.items():
+                        if camera not in ("top","side"):continue
                         lab = labels.get(camera) if labels is not None else None
                         if labels is None and camera in self.seg:
                             L,start0=self.seg[camera]
@@ -157,7 +172,7 @@ class StreamConverter:
                     detail = {}
                 self.init_info[o.name] = {"cold_registration_fitness": fit, "rmse_mm": rmse * 1000, **detail}
             else:
-                self.init_info[o.name] = {"library_scan_pose": True}
+                self.init_info.setdefault(o.name, {"current_frame_geometry": True})
             init[o.name] = T0
         self.trk = MeshTracker(self.objs, init, self.tarm)
         self.trk.initial_hypotheses=self.init_hypotheses
@@ -170,6 +185,7 @@ class StreamConverter:
         R = self.arms.points(q)
         keep = objlib.robot_free(P, R, 0.03)
         for o in self.objs:
+            if not getattr(o,"initial_valid",True):continue
             S = o.icp_pts @ init[o.name][:3, :3].T + init[o.name][:3, 3]
             keep &= objlib.robot_free(P, S, 0.012)
         P, C = P[keep], C[keep]
@@ -204,11 +220,37 @@ class StreamConverter:
         tr = self.cal.robot_tick(self.ep, "top", t)
         if q is None:
             q = {a: self.cal.q_at(self.ep, a, tr) for a in ("left", "right")}
-        poses = self.trk.step(t, views, q, self.T_world_base)
+        aux=[]
+        if any(c.endswith("_wrist") for c in frames):
+            LP=self.arms.link_poses(q);A=np.eye(4);A[:3,:3]=[[0,1,0],[1,0,0],[0,0,-1]]
+            for arm_ in ("left","right"):
+                c=arm_+"_wrist"
+                if c not in frames:continue
+                G=LP[self.arms.bodies.index((arm_,"gripper"))];Twc=G@A@np.asarray(self.ep.calib["X_"+arm_])
+                aux.append(CamView(c,frames[c][0],self.ep.intrinsics(c),Twc,rgb=frames[c][1],lowres=(240,320)))
+        # Passive tray: current RGB-D supports sliding/yaw; it never follows a hand.
+        if "box" in self.trk.state:
+            from .box_fixture import update_box_pose
+            pp=[];cc=[]
+            for c in ("top","side"):
+                if c not in frames:continue
+                P,C,_,_=objlib.depth_points(frames[c][0],frames[c][1],self.ep.intrinsics(c),self.cal.T_world_cam(c),stride=4)
+                pp.append(P);cc.append(C)
+            st=self.trk.state["box"];meta=self.metas["box"]
+            if not st.valid:
+                from .box_fixture import fit_box,refine_box_pose
+                try:
+                    T0,_,Q,_,_=fit_box(np.concatenate(pp),np.concatenate(cc));st.T,_=refine_box_pose(T0,Q@T0[:3,:3].T+T0[:3,3],meta["dimensions_m"]);st.valid=True
+                except ValueError:pass
+            detail={"observed":bool(st.valid)}
+            if st.valid:st.T,detail=update_box_pose(st.T,np.concatenate(pp),np.concatenate(cc),meta["dimensions_m"],meta.get("wall_planes"))
+            self.box_diagnostic=detail
+        poses = self.trk.step(t, views, q, self.T_world_base,aux_views=aux)
         out = {"q": q, "robot_T": self.arms.link_poses(q).astype(np.float32), "obj_T": {}, "obj_res": {}, "obj_held": {}}
         for o in self.objs:
             st = self.trk.state[o.name]
-            out["obj_T"][o.name] = poses[o.name].astype(np.float32)
+            out["obj_T"][o.name] = poses[o.name].astype(np.float32) if st.valid else np.full((4,4),np.nan,np.float32)
+            out.setdefault("obj_valid",{})[o.name]=bool(st.valid and np.isfinite(poses[o.name]).all())
             out["obj_res"][o.name] = st.last_res
             out["obj_held"][o.name] = 0 if st.held is None else (1 if st.held == "left" else 2)
             out.setdefault("obj_relocs", {})[o.name] = st.relocs
@@ -223,3 +265,7 @@ class StreamConverter:
         R = self.arms.points(None, poses=out["robot_T"].astype(float))
         O = [o.samples @ out["obj_T"][o.name][:3, :3].T + out["obj_T"][o.name][:3, 3] for o in self.objs]
         return np.concatenate([R] + O + [self.static[0]]).astype(np.float32)
+
+    def point_valid(self,out):
+        """Validity matching points(out); unknown objects remain fixed-ID masked slots."""
+        return np.concatenate([np.ones(len(self.arms.local),bool)]+[np.full(len(o.samples),out.get("obj_valid",{}).get(o.name,True),bool) for o in self.objs]+[np.ones(len(self.static[0]),bool)])

@@ -76,6 +76,7 @@ class LibObject:
 @dataclass
 class ObjState:
     T: np.ndarray
+    valid: bool = True
     held: str | None = None
     T_grip_obj: np.ndarray | None = None
     grip_at_grasp: float = 1.0
@@ -129,7 +130,9 @@ class CamView:
     def zbuf(self, verts_world: torch.Tensor, faces):
         M = torch.tensor(self.Tcw, dtype=torch.float32, device="cuda")
         Vc = verts_world @ M[:3, :3].T + M[:3, 3]
-        _, z = self.R.raster(Vc[None], faces)
+        if (Vc[:,2]>.03).sum()<3:return torch.zeros((self.R.H,self.R.W),device=Vc.device)
+        try:_, z = self.R.raster(Vc[None], faces)
+        except IndexError:return torch.zeros((self.R.H,self.R.W),device=Vc.device)
         return z[0]
 
 
@@ -137,7 +140,7 @@ class MeshTracker:
     def __init__(self, objects: list, init_poses: dict, arm_model, cfg=None):
         """objects: LibObject list; init_poses {name: T_world_obj}; arm_model: TorchArm (for FK, gripper, occlusion)."""
         self.objs = {o.name: o for o in objects}
-        self.state = {o.name: ObjState(np.asarray(init_poses[o.name], float)) for o in objects}
+        self.state = {o.name: ObjState(np.asarray(init_poses[o.name], float),valid=getattr(o,"initial_valid",True)) for o in objects}
         self.arm = arm_model
         self.cfg = dict(contact=0.03, grasp_tip=0.02, grip_close=0.15, release_open=0.15, icp_iters=6, huber=0.005, held_max_corr=0.01, held_blend=0.1, held_blend_mask=0.3, mask_min_pts=60, mask_move_gate=0.002, cam_min_pts=40, sil_refine=os.environ.get("REALPC_SIL", "0") == "1", sil_steps=int(os.environ.get("REALPC_SIL_STEPS", "12")), sil_lr=0.07,
                         sil_min_px=40, sil_min_gain=0.01, cam_equal_weight=os.environ.get("REALPC_CAM_EQUAL", "0") == "1",
@@ -172,7 +175,7 @@ class MeshTracker:
         return out
 
     # -------------------------------------------------------------- main step
-    def step(self, t, views: list, q: dict, T_world_base: dict):
+    def step(self, t, views: list, q: dict, T_world_base: dict, aux_views=None):
         """views: list of CamView for this tick (cameras whose content time ~ t). Returns {name: T_world_obj}."""
         self.tick = t
         rob = self.robot(q, T_world_base)
@@ -203,6 +206,7 @@ class MeshTracker:
         # 1. prediction + grasp / release logic
         for name, st in self.state.items():
             o = self.objs[name]
+            if not st.valid or getattr(o,"passive_fixture",False):continue
             P = st.T[:3, :3] @ o.samples.T
             P = (P.T + st.T[:3, 3])
             if st.held is not None:
@@ -227,10 +231,25 @@ class MeshTracker:
                         busy.add(arm_)
                         break
         self.previous_grip = {a:r["grip"] for a,r in rob.items()}
+        if "broom" in self.objs and os.environ.get("REALPC_BROOM_MATERIAL","0")=="1" and os.environ.get("REALPC_BROOM_CLEAN_MASK","0")=="1":
+            from .broom_refine import BroomRefiner
+            if not hasattr(self,"broom_refiner"):self.broom_refiner=BroomRefiner(self.objs["broom"])
+            observed,_,_,_,_=self.broom_refiner.observe(self.state["broom"].T,views,robot_z)
+            greens={v.name:v.labels==1 for v in observed};lid=list(self.objs).index("broom")+1
+            for v,rz in zip(views,robot_z):
+                if v.labels is None:continue
+                shape=v.labels.shape;lab=v.labels.copy();zrobot=cv2.resize(rz,(shape[1],shape[0]),interpolation=0);depth=cv2.resize(v.D,(shape[1],shape[0]),interpolation=0)
+                green=cv2.resize(greens.get(v.name,np.zeros(shape,bool)).astype(np.uint8),(shape[1],shape[0]),interpolation=0).astype(bool)
+                foreground=(zrobot<1e8)&((depth<.1)|(zrobot<depth+.008))&~green
+                lab[(lab==lid)&foreground]=254
+                # Material identity + preceding/FK pose gates the added bristles.
+                lab[green]=lid;v.labels=lab
         # object z-buffers (inter-object occlusion), with predicted poses
         obj_z = {}
         for name, st in self.state.items():
             o = self.objs[name]
+            if not st.valid:
+                obj_z[name]=[np.zeros((v.R.H,v.R.W),np.float32) for v in views];continue
             Tt = torch.tensor(st.T, dtype=torch.float32, device="cuda")
             Vw = o.verts_t @ Tt[:3, :3].T + Tt[:3, 3]
             obj_z[name] = [v.zbuf(Vw, o.faces_t).cpu().numpy() for v in views]
@@ -242,6 +261,15 @@ class MeshTracker:
         for name in order:
             st = self.state[name]
             o = self.objs[name]
+            if not st.valid:
+                st.mode="unobserved";out[name]=np.full((4,4),np.nan);continue
+            if getattr(o,"passive_fixture",False):
+                st.mode="passive_fixture";st.held=None;st.carrier=None
+                if name=="box" and (t-self.first_tick)%5==0:
+                    from .box_fixture import refine_box_silhouette
+                    st.T,self.box_silhouette=refine_box_silhouette(o,st.T,views,robot_z)
+                st.last_res=self.residual(o,st.T,views,robot_z,obj_z,name)
+                out[name]=st.T.copy();st.history.append(st.T.copy());continue
             Pw = (st.T[:3, :3] @ o.samples.T).T + st.T[:3, 3]
             tree = cKDTree(Pw)
             near_robot = tree.query(Rv, distance_upper_bound=self.cfg["contact"])[0].min() < self.cfg["contact"]
@@ -422,10 +450,21 @@ class MeshTracker:
             moved[name] = st.T @ np.linalg.inv(prevT[name])
             out[name] = st.T.copy()
             st.history.append(st.T.copy())
+        if "broom" in self.objs and os.environ.get("REALPC_BROOM_MATERIAL","0")=="1":
+            from .broom_refine import BroomRefiner
+            if not hasattr(self,"broom_refiner"):self.broom_refiner=BroomRefiner(self.objs["broom"])
+            extras=aux_views or [];extra_z=[]
+            for v in extras:
+                zz=[v.zbuf(r["V"],self.arm.faces) for r in rob.values()]
+                extra_z.append(torch.stack([torch.where(z>0,z,torch.full_like(z,1e9)) for z in zz]).amin(0).cpu().numpy())
+            st=self.state["broom"];Tn,detail=self.broom_refiner.refine(self,st.T,views+extras,robot_z+extra_z)
+            self.broom_refiner.stats=detail;st.T=Tn
+            if st.held is not None:st.T_grip_obj=np.linalg.inv(rob[st.held]["G"])@Tn
+            st.history[-1]=Tn.copy();out["broom"]=Tn.copy()
         # A block near a moving tool is not necessarily riding it. Require observed
         # contact and co-motion over three ticks before assigning a rigid carrier.
         for name,st in self.state.items():
-            if st.held is not None or st.carrier is not None or sum(st.support.values())<60:
+            if getattr(self.objs[name],"passive_fixture",False) or st.held is not None or st.carrier is not None or sum(st.support.values())<60:
                 continue
             o=self.objs[name];W=o.samples@st.T[:3,:3].T+st.T[:3,3];tree=cKDTree(W)
             for parent,car in self.state.items():
@@ -444,7 +483,7 @@ class MeshTracker:
         if self.acquire_held and t-self.first_tick<60 and self.previous_G:
             busy={s.held for s in self.state.values() if s.held is not None}
             for name,st in self.state.items():
-                if st.held is not None or st.carrier is not None or sum(st.support.values())<60:
+                if getattr(self.objs[name],"passive_fixture",False) or st.held is not None or st.carrier is not None or sum(st.support.values())<60:
                     continue
                 W=self.objs[name].samples@st.T[:3,:3].T+st.T[:3,3];tree=cKDTree(W)
                 for arm_,r in rob.items():

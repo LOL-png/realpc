@@ -31,7 +31,7 @@ def load(path, with_points=True):
         OL = d["obj_local"]; OI = d["obj_index"].astype(int); OT = d["obj_T"]
         if with_points:
             parts.append(np.einsum("tnij,nj->tni", OT[OI].transpose(1, 0, 2, 3)[:, :, :3, :3], OL) + OT[OI].transpose(1, 0, 2, 3)[:, :, :3, 3])
-        group.append(np.full(len(OL), 3)); obj_id.append(OI); color.append(d["obj_color"]); finger.append(np.zeros(len(OL), bool))
+        group.append(np.where(d.get("obj_static",np.zeros(len(OT),bool))[OI],2,3)); obj_id.append(OI); color.append(d["obj_color"]); finger.append(np.zeros(len(OL), bool))
         valid.append(d["obj_valid"][OI].T)
     # static
     S = d["static_points"]
