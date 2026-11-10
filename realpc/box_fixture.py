@@ -132,7 +132,7 @@ def refine_box_silhouette(obj,T,views,robot_z):
         ignored=(rz<1e8)|((depth>.1)&pred&(depth<z-.020));mask[ignored]=254
         q=copy.copy(v);q.labels=mask;adapted.append(q);rzs.append(rz)
     if not adapted:return T,{'silhouette_views':0}
-    Tn,before,after=refine_contours(obj,T,adapted,rzs,1,rounds=2)
+    Tn,before,after=refine_contours(obj,T,adapted,rzs,1,rounds=2,planar=True)
     accepted=Tn is not None and after>before+.005
     result=Tn if accepted else T;per={}
     V=obj.verts_t@torch.tensor(result[:3,:3].T,device='cuda',dtype=torch.float32)+torch.tensor(result[:3,3],device='cuda',dtype=torch.float32)

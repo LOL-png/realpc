@@ -10,7 +10,7 @@ from scipy.spatial import cKDTree
 from scipy.spatial.transform import Rotation
 
 
-def refine_contours(o, T, views, robot_z, lid, alternatives=(), rounds=3, landmarks=()):
+def refine_contours(o, T, views, robot_z, lid, alternatives=(), rounds=3, landmarks=(), planar=False):
     data=[]
     for v,rz in zip(views,robot_z):
         if v.labels is None:continue
@@ -35,7 +35,7 @@ def refine_contours(o, T, views, robot_z, lid, alternatives=(), rounds=3, landma
         if score>best:T=alt.copy();best=score;per0=per;zs=z
     base=T.copy();bestT=T.copy();start_per=per0
     if best>=.91:return bestT,original,float(best)
-    units=np.array([.15,.15,.15,.02,.02,.02])
+    units=np.array([.15,.02,.02]) if planar else np.array([.15,.15,.15,.02,.02,.02])
     for _ in range(rounds):
         pairs=[]
         for z,(v,m,valid,safe,sdf,target,wc) in zip(zs,data):
@@ -51,7 +51,12 @@ def refine_contours(o, T, views, robot_z, lid, alternatives=(), rounds=3, landma
             pairs.append((local,local[j[ok]],target[ok],v.Tcw,K,sdf,wc))
         if not pairs:break
         def transform(x):
-            delta=x*units;D=np.eye(4);D[:3,:3]=Rotation.from_rotvec(delta[:3]).as_matrix();D[:3,3]=delta[3:];return T@D
+            delta=x*units;D=np.eye(4)
+            if planar:
+                D[:3,:3]=Rotation.from_rotvec([0,0,delta[0]]).as_matrix();D[:2,3]=delta[1:]
+            else:
+                D[:3,:3]=Rotation.from_rotvec(delta[:3]).as_matrix();D[:3,3]=delta[3:]
+            return T@D
         def residual(x):
             M=transform(x);res=[]
             for P,Q,target,Tcw,K,sdf,wc in pairs:
@@ -66,7 +71,7 @@ def refine_contours(o, T, views, robot_z, lid, alternatives=(), rounds=3, landma
                 res.append((uv-uv_target)/sigma*.3)
             res.append(.07*x)
             return np.concatenate(res)
-        fit=least_squares(residual,np.zeros(6),bounds=(-1.2,1.2),diff_step=1e-3,max_nfev=14,loss='soft_l1',f_scale=1.)
+        fit=least_squares(residual,np.zeros(len(units)),bounds=(-1.2,1.2),diff_step=1e-3,max_nfev=14,loss='soft_l1',f_scale=1.)
         candidate=transform(fit.x);score,per,znew=render(candidate)
         if score>best+.0005 and all(q>=p-.08 for q,p in zip(per,start_per)):
             best=score;bestT=candidate.copy();T=candidate;zs=znew
