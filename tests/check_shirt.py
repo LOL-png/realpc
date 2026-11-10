@@ -14,6 +14,15 @@ m=trimesh.Trimesh(V,F,process=False);edges,count=np.unique(m.edges_sorted,axis=0
 assert (count<=2).all() and len(m.split(only_watertight=False))==1
 edge=edges[count==1];ids=np.unique(edge);lookup=np.full(len(V),-1,int);lookup[ids]=np.arange(len(ids));edge=lookup[edge]
 assert connected_components(coo_matrix((np.ones(len(edge)),(edge[:,0],edge[:,1])),shape=(len(ids),len(ids))),directed=False)[0]==4
+# A single sheet is a disk, with no duplicated panel or seam vertices.
+sv,sf,sn,spair=make_panels(outline()*.5,.025,layers=1)
+sm=trimesh.Trimesh(sv,sf,process=False)
+se,sc=np.unique(sm.edges_sorted,axis=0,return_counts=True)
+assert len(sv)==sn and np.array_equal(spair,np.arange(sn))
+assert (sc<=2).all() and len(sm.split(only_watertight=False))==1
+assert len(sv)-len(se)+len(sf)==1 and np.all(sv[:,2]==0)
+be=se[sc==1];_,degree=np.unique(be,return_counts=True);assert (degree==2).all()
+print('PASS single-sheet disk topology, one outline, no duplicate layer')
 from realpc.cloth_physics import IPCContact
 contact=IPCContact(V,m.edges_unique,F);assert not contact.intersects(V)
 p=Path('/home/howardji/data_ext/astra_cloth/auto_inputs/frames');f=dict(np.load(p/'0000.npz'));M,plane=depth_seed(f)

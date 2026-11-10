@@ -8,7 +8,7 @@ from realpc.cloth_inputs import project
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer.mesh.rasterize_meshes import rasterize_meshes
 
-def render(frame,c,X,F):
+def render(frame,c,X,F,layers=2):
     im=frame[c+'_rgb'].copy();h,w=im.shape[:2];K,T=frame[c+'_K'],frame[c+'_T'];D=frame[c+'_depth']
     Q=(X-T[:3,3])@T[:3,:3];R=Renderer(K,h,w)
     with torch.inference_mode():
@@ -22,7 +22,7 @@ def render(frame,c,X,F):
     robot=np.zeros((h,w),np.uint8);robot[xy[good,1],xy[good,0]]=1;robot=cv2.dilate(robot,np.ones((5,5),np.uint8))
     visible=(ids>=0)&~((robot>0)&(D>.08)&(depth>D-.005))
     tri=Q[F];normal=np.cross(tri[:,1]-tri[:,0],tri[:,2]-tri[:,0]);normal/=np.maximum(np.linalg.norm(normal,axis=1),1e-10)[:,None]
-    shade=.65+.35*np.abs(normal[:,2]);colors=np.where((np.arange(len(F))<len(F)//2)[:,None],np.array([230.,170.,30.]),np.array([40.,145.,245.]))*shade[:,None]
+    shade=.65+.35*np.abs(normal[:,2]);front=(normal[:,2]<0) if layers==1 else (np.arange(len(F))<len(F)//2);colors=np.where(front[:,None],np.array([230.,170.,30.]),np.array([40.,145.,245.]))*shade[:,None]
     tint=colors[np.maximum(ids,0)];im[visible]=(.55*im[visible]+.45*tint[visible]).astype(np.uint8)
     edges=visible&(bc.min(2)<.025);im[edges]=(.6*im[edges]+.4*np.array([35,55,65])).astype(np.uint8)
     return im
@@ -30,14 +30,15 @@ def render(frame,c,X,F):
 def main():
     p=argparse.ArgumentParser();p.add_argument('--fit',required=True);p.add_argument('--inputs',required=True);p.add_argument('--out',required=True);p.add_argument('--fps',type=float,default=15);a=p.parse_args()
     fit=Path(a.fit);out=Path(a.out);out.mkdir(parents=True,exist_ok=True);z=np.load(fit/'mesh.npz');XX,F=z['X'],z['F']
+    layers=json.load(open(fit/'template_info.json')).get('layers',2) if (fit/'template_info.json').exists() else 2
     video=out/'both_cameras.mp4';ff=subprocess.Popen(['ffmpeg','-y','-loglevel','error','-f','rawvideo','-pix_fmt','bgr24','-s','1280x840','-r',str(a.fps),'-i','pipe:0','-an','-c:v','libx264','-preset','fast','-crf','20','-pix_fmt','yuv420p','-movflags','+faststart',str(video)],stdin=subprocess.PIPE,stderr=subprocess.PIPE)
     picks=np.unique(np.minimum([0,150,175,210,240,300,350,390,452],len(XX)-1));sheets=[]
     for t,X in enumerate(XX):
         with np.load(Path(a.inputs)/'frames'/f'{t:04d}.npz') as f:frame={k:f[k] for k in f.files}
         rows=[]
         for c in ('top','side'):
-            im=frame[c+'_rgb'];ov=render(frame,c,X,F);cv2.rectangle(ov,(0,0),(640,29),(35,35,35),-1)
-            cv2.putText(ov,f'{c} | frame {t} | blue: initial front, orange: back',(8,20),0,.44,(255,255,255),1,cv2.LINE_AA)
+            im=frame[c+'_rgb'];ov=render(frame,c,X,F,layers=layers);cv2.rectangle(ov,(0,0),(640,29),(35,35,35),-1)
+            cv2.putText(ov,f'{c} | frame {t} | '+('single sheet: two surface sides' if layers==1 else 'blue: initial front, orange: back'),(8,20),0,.44,(255,255,255),1,cv2.LINE_AA)
             rows.append(np.hstack([im,ov]))
         canvas=np.ascontiguousarray(np.vstack(rows));ff.stdin.write(canvas.tobytes())
         if t in picks:

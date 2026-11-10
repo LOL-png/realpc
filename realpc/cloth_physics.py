@@ -162,6 +162,10 @@ class IPCContact:
     """IPC Toolkit barrier + continuous collision filtering, initialized uncut."""
     def __init__(self,X,E,F,dhat=.001,stiffness=1e9):
         import ipctk
+        # Parallel contact reductions perturb visibility/line-search decisions.
+        # These small cloth meshes use deterministic single-thread reductions
+        # in both live inference and conversion.
+        ipctk.set_num_threads(1)
         self.ipc=ipctk;self.broad_phase=ipctk.LBVH();self.ccd=ipctk.AdditiveCCD(max_iterations=100000);self.mesh=ipctk.CollisionMesh(np.asarray(X,float),np.asarray(E,np.int32),np.asarray(F,np.int32))
         if ipctk.has_intersections(self.mesh,np.asarray(X,float)):raise ValueError('IPC requires an intersection-free initial mesh')
         self.barrier=ipctk.BarrierPotential(dhat,stiffness);self.dhat=dhat;self.last_alpha=1.;self.last_contacts=0

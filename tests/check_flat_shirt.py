@@ -11,6 +11,7 @@ config=dict(template='shirt',flat_rest=True,material_slack=1.3,length_slack=1.35
     paired_grasp=True,bending=1,joint_physics=True,strain_stiffness=5000,
     strain_limit=.02,ipc_contact=True,layer_visibility=True,idle_gate=True,
     silhouette=True)
+if '--single-layer' in sys.argv:config.update(shirt_layers=1,paired_grasp=False,table_contact=True)
 if '--dynamics' in sys.argv:
     config.update(material_slack=1.15,length_slack=1.25,table_contact=True,
         dynamics=True,dynamics_gain=25.,native_init_iters=3,boundary_grasp=True)
@@ -24,6 +25,8 @@ for t in range(3):
     x,m,_=live.step(t,f,iters=2);saved.append(x.copy())
     if t==0:
         rest=live.cm.V0.copy();faces=live.cm.sf.copy();bary=live.cm.sb.copy()
+        if '--single-layer' in sys.argv:
+            assert len(x)==live.template_info['panel_vertices'] and live.bend_matrix.nnz>0
         assert np.array_equal(live.prev_X,x), 't0 registration must not create velocity'
     assert np.array_equal(rest,live.cm.V0)
     assert np.array_equal(faces,live.cm.sf) and np.array_equal(bary,live.cm.sb)
