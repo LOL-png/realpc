@@ -7,7 +7,7 @@ class DepthMeshPipeline:
     def __init__(self,converter,sam_checkpoint):
         os.environ['REALPC_DEPTH_MESH']='1'
         self.converter=converter;converter.seg={}
-        self.checkpoint=sam_checkpoint;self.model=None;self.events=[]
+        self.checkpoint=sam_checkpoint;self.model=None;self.segmenter=None;self.events=[]
         self.bad={};self.pending=[];self.last_recovery={};self.timings=[];self.last_health={}
 
     def _sam(self,t,frames,q,initial):
@@ -36,10 +36,10 @@ class DepthMeshPipeline:
                         else:st.T_grip_obj=np.linalg.inv(arm['G'])@T
                 self.last_recovery[n]=t;self.bad[n]=0
         from .online_masks import OnlineObjectSegmenter
-        sampler=OnlineObjectSegmenter(c,self.model,reset_tracker_on_seed=initial)
-        labels=sampler.step(t,frames,q=q)
-        for m in sampler.memory.values():self.model.reset_state(m.state)
-        sampler.memory.clear()
+        if self.segmenter is None:self.segmenter=OnlineObjectSegmenter(c,self.model,reset_tracker_on_seed=initial)
+        # Retain appearance memory, but feed SAM only event frames. Skipped
+        # packets are never encoded or queued for later processing.
+        labels=self.segmenter.step(t,frames,q=q)
         self.events.append({'tick':int(t),'reason':'initialize' if initial else 'reacquire','objects':[o.name for o in c.objs] if initial else list(self.pending),'trigger':{} if initial else {n:self.last_health.get(n,{}) for n in self.pending},'camera_calls':len(labels),'seconds':time.perf_counter()-start})
         return labels
 
@@ -54,11 +54,12 @@ class DepthMeshPipeline:
             st=c.trk.state[n]
             if getattr(c.trk.objs[n],'passive_fixture',False):continue
             bad=d['visible']>=80 and (d['free_fraction']>.40 or d['support']<30)
+            bad |= any(iou<.50 for iou in d.get('view_iou',{}).values())
             residual,count=st.last_res
             self.last_health[n]={**d,'residual_mm':float(residual*1000) if np.isfinite(residual) else None,'residual_count':int(count),'mode':st.mode}
             bad |= d['visible']>=80 and count>=40 and np.isfinite(residual) and residual>.010
             self.bad[n]=self.bad.get(n,0)+1 if bad else 0
-            if self.bad[n]>=3 and t-self.last_recovery.get(n,c.start)>=30:self.pending.append(n)
+            if self.bad[n]>=3 and t-self.last_recovery.get(n,c.start)>=8:self.pending.append(n)
         self.timings.append(time.perf_counter()-start)
         return out
 

@@ -68,6 +68,15 @@ def associate_depth(tracker, views, robot_z, object_z):
         # Upsampling the labels onto other depth pixels can reintroduce foreground
         # robot edges and table returns which were never tested above.
         v.associated_points={oi:P[labels==oi] for oi in range(1,len(names)+1)}
-        for oi,name in enumerate(names,1):diagnostics[name]['support']+=int((labels==oi).sum())
+        for oi,name in enumerate(names,1):
+            diagnostics[name]['support']+=int((labels==oi).sum())
+            z=object_z[name][vi]
+            ignore=(labels==254)|((labels>0)&(labels!=oi))
+            # Real foreground occlusion does not count as silhouette failure.
+            ignore|=(z>0)&(D<z-.015)&(labels!=oi)
+            pred=(z>0)&~ignore;observed=labels==oi
+            union=int((pred|observed).sum())
+            if union>=80:
+                diagnostics[name].setdefault('view_iou',{})[v.name]=float((pred&observed).sum()/union)
     for d in diagnostics.values():d['free_fraction']=d['free']/max(1,d['visible'])
     tracker.depth_diagnostics=diagnostics

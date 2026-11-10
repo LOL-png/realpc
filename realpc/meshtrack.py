@@ -185,7 +185,7 @@ class MeshTracker:
         """views: list of CamView for this tick (cameras whose content time ~ t). Returns {name: T_world_obj}."""
         self.tick = t
         if self.cfg["depth_mesh"]:
-            every=int(os.environ.get("REALPC_DEPTH_CONTOUR_EVERY","4"))
+            every=int(os.environ.get("REALPC_DEPTH_CONTOUR_EVERY","0"))
             self.cfg["sil_refine"]=any(v.labels is not None for v in views) or (every>0 and t%every==0)
         rob = self.robot(q, T_world_base)
         # robot z-buffers per view (occlusion)
