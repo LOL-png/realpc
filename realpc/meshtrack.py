@@ -410,6 +410,10 @@ class MeshTracker:
                 st.history.append(st.T.copy())
                 continue
             if any(v.labels is not None for v in views):
+                if depth_observation:
+                    # Do not report the last visible frame's residual as a
+                    # measurement of a currently occluded object.
+                    st.last_res=(float(np.median(depth_distance)) if len(depth_distance) else np.nan,len(depth_distance))
                 if self.cfg["sil_refine"]:
                     Tn, ib, ia = self.sil_refine(o, st.T, views, robot_z, lid)
                     if Tn is not None and ia > ib + self.cfg["sil_min_gain"]:
