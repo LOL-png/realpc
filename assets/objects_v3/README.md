@@ -46,3 +46,5 @@ The box mesh is approximately 26.3 × 17.9 × 7.9 cm. Four wall planes and the f
 `StreamConverter.points(out)` and `point_valid(out)` return the live point array and its validity mask. Unknown bodies retain fixed point slots with invalid/NaN coordinates. `realpc.dataset.load` handles the same representation. Validity is not a certificate of geometric accuracy; inspect observation support and QA.
 
 The paused dataset_v2 files are preserved. Previously finished sweep files lack the new box and need refreshed conversion when that task resumes. Full-episode and sampled/cold-start results are separate in `reports/ASTRA_Q29_1109/SWEEP_BOX_BROOM_REVIEW.md`; do not interpret the hard-frame audit as an all-episode closed-loop score.
+
+Forward SAM memory retention keeps the initial conditioning frame(s) and at least32 recent outputs, expanded from the installed model memory/pointer spans. Old unselected mask tensors and raw images are discarded. This applies only to the current-frame streaming API, not retrospective interactive edits. A96-frame mask check crossing the retention boundary matched the untrimmed run exactly (0/22,118,400 differing pixels).

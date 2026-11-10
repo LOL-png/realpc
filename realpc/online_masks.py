@@ -118,6 +118,21 @@ class ObjectMaskStream:
         with torch.inference_mode(),torch.autocast('cuda',dtype=torch.bfloat16):
             result=list(self.model.propagate_in_video(self.state,start_frame_idx=self.t,max_frame_num_to_track=0,reverse=False))
             _,oids,logits=result[-1];x=logits[:,0].float().cpu().numpy();lab=np.asarray(oids,np.uint8)[x.argmax(0)];lab[x.max(0)<=0]=0
+        # Forward-only streaming never revisits old raw frames. SAM2's memory
+        # selector reads a finite recent window plus conditioning frame(s).
+        # Retain those exactly; do not keep every old mask-memory tensor forever.
+        if os.environ.get("REALPC_MASK_RETAIN_ALL","0") != "1":
+            span=max(32,int(self.model.max_obj_ptrs_in_encoder)+2,
+                     int(self.model.num_maskmem)*int(self.model.memory_temporal_stride_for_eval)+2)
+            cutoff=self.t-span
+            for outputs in self.state["output_dict_per_obj"].values():
+                old=outputs["non_cond_frame_outputs"]
+                for k in list(old):
+                    if k<cutoff:del old[k]
+            protected={k for outputs in self.state["output_dict_per_obj"].values()
+                       for k in outputs["cond_frame_outputs"]}
+            for k in range(max(1,cutoff-2),max(1,cutoff)):
+                if k not in protected:self.images[k]=None
         return lab
 
 def render_seeds(conv,c,shape,q):

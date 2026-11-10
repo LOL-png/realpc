@@ -25,6 +25,7 @@ from realpc.v4 import StreamConverter  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--episode", required=True); ap.add_argument("--out_dir", required=True)
+ap.add_argument("--cameras",nargs="+",default=["top","side"],choices=["top","side"])
 ap.add_argument("--start", type=int, default=0); ap.add_argument("--stop", type=int, default=None)
 ap.add_argument("--calib", default=os.path.join(ROOT, "configs", "calib_yam_rig_v3.json"))
 ap.add_argument("--assets", default=os.path.join(ROOT, "assets", "objects"))
@@ -69,7 +70,7 @@ class Frames:
         return (x - MEAN) / STD
 
 
-for c in ("top", "side"):
+for c in a.cameras:
     t0 = time.time()
     cap = cv2.VideoCapture(ep.video(c)); cap.set(cv2.CAP_PROP_POS_FRAMES, a.start)
     ims = []

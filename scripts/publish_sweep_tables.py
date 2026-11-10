@@ -2,7 +2,7 @@ import csv,json
 from pathlib import Path
 import numpy as np,cv2
 D=Path('/home/howardji/data_ext/astra_rigid');O=Path('/home/howardji/point_tracker/reports/ASTRA_Q29_1109')
-b=json.load(open(D/'box_audit04/metrics.json'))['records'];h=json.load(open(D/'hard50/metrics.json'))['records'];records=[]
+b=json.load(open(D/'box_audit05/metrics.json'))['records'];h=json.load(open(D/'hard50/metrics.json'))['records'];records=[]
 for r in sorted(h,key=lambda x:x['episode']):
  row={'episode':r['episode'],'broom_tick':r['tick'],'broom_baseline':r['baseline']}
  for c in ['top','side']:
@@ -23,7 +23,7 @@ for r in records:
   vals.append(f"{r[f'broom_{c}_before_iou']:.3f} → {r[f'broom_{c}_after_iou']:.3f}" if r[f'broom_{c}_eligible'] else 'occluded')
  s.append(f"| {r['episode']} | {r['broom_tick']} / {r['broom_baseline']} | {vals[0]} | {vals[1]} | {r['box_top_silhouette_pass']}/{r['box_top_eligible']} | {r['box_side_silhouette_pass']}/{r['box_side_eligible']} |")
 (O/'sweep_alignment_all50.md').write_text('\n'.join(s)+'\n')
-for name,paths in [('broom_hard_frame_comparison',[D/'hard50'/f'episode_{i:04d}.jpg' for i in [6,10,13,30]]),('box_multiepisode_contact_sheet',[D/'box_audit04'/x for x in ['episode_0000_0000.jpg','episode_0000_0848.jpg','episode_0010_0292.jpg','episode_0020_0402.jpg']])]:
+for name,paths in [('broom_hard_frame_comparison',[D/'hard50'/f'episode_{i:04d}.jpg' for i in [6,10,13,30]]),('box_multiepisode_contact_sheet',[D/'box_audit05'/x for x in ['episode_0000_0000.jpg','episode_0000_0848.jpg','episode_0010_0292.jpg','episode_0020_0402.jpg']])]:
  ims=[]
  for p in paths:
   im=cv2.imread(str(p)); assert im is not None,p
