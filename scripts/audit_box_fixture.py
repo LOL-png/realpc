@@ -13,11 +13,11 @@ from realpc.v4 import load_library
 from realpc.diffcalib import Renderer,TorchArm
 from realpc.config import load_config
 from realpc.meshtrack import MeshTracker,CamView
-ap=argparse.ArgumentParser();ap.add_argument('--refine',action='store_true');ap.add_argument('--sil',action='store_true');ap.add_argument('--episodes',nargs='+',type=int,default=list(range(50)));ap.add_argument('--fits',required=True);ap.add_argument('--out',required=True);a=ap.parse_args();torch.set_num_threads(2)
+ap=argparse.ArgumentParser();ap.add_argument('--ticks',nargs='+',type=int);ap.add_argument('--refine',action='store_true');ap.add_argument('--sil',action='store_true');ap.add_argument('--episodes',nargs='+',type=int,default=list(range(50)));ap.add_argument('--fits',required=True);ap.add_argument('--out',required=True);a=ap.parse_args();torch.set_num_threads(2)
 out=Path(a.out);out.mkdir(parents=True,exist_ok=True);cal=RigCalib.load(ROOT/'configs/calib_yam_rig_v3.json');obs,metas=load_library(ROOT/'assets/objects_v3/sweep',100);o=next(o for o in obs if o.name=='box');dims=np.array(metas['box']['dimensions_m']);records=[]
 cfg=load_config(ROOT/'configs/yam_bimanual.json');r=cfg['robot'];arm=TorchArm(str(Path(cfg['_dir'])/r['urdf']),r['arm_joints'],r['finger_joints']);trk=MeshTracker([o],{'box':np.eye(4)},arm)
 for i in a.episodes:
- ep=Episode(f'/home/howardji/data_ext/agentwm_probe/hf/sweep/episode_{i:04d}');z=np.load(Path(a.fits)/(ep.name+'.npz'));T=z['T'];ts=[0,(len(ep.low['t_cap'])-1)//2,len(ep.low['t_cap'])-1];region=json.load(open(Path(ep.path)/'table_region.json'));per={t:[] for t in ts};images={t:[] for t in ts}
+ ep=Episode(f'/home/howardji/data_ext/agentwm_probe/hf/sweep/episode_{i:04d}');z=np.load(Path(a.fits)/(ep.name+'.npz'));T=z['T'];ts=a.ticks or [0,(len(ep.low['t_cap'])-1)//2,len(ep.low['t_cap'])-1];region=json.load(open(Path(ep.path)/'table_region.json'));per={t:[] for t in ts};images={t:[] for t in ts}
  poses={t:T.copy() for t in ts};sildata={}
  if a.refine:
   packets={t:[] for t in ts};frames={t:{} for t in ts}
@@ -52,7 +52,7 @@ for i in a.episodes:
  for t in ts:
   T=poses[t];Q=np.concatenate(per[t]);Tn,detail=refine_box_pose(T,Q,dims);shift=float(np.linalg.norm(Tn[:3,3]-T[:3,3])*1000);moves.append(shift)
   for rec in records:
-   if rec['episode']==ep.name and rec['tick']==t:rec['current_refit_shift_mm']=shift;rec['pose_from_start_mm']=float(np.linalg.norm(poses[t][:3,3]-poses[ts[0]][:3,3])*1000)
+   if rec['episode']==ep.name and rec['tick']==t:rec['current_refit_shift_mm']=shift;rec['pose_from_start_mm']=float(np.linalg.norm(poses[t][:3,3]-poses[ts[0]][:3,3])*1000);rec['table_normal_change_deg']=float(np.degrees(np.arccos(np.clip(poses[t][:3,2]@poses[ts[0]][:3,2],-1,1))));rec['table_height_change_mm']=float((poses[t][:3,3]-poses[ts[0]][:3,3])@poses[ts[0]][:3,2]*1000)
   if images[t]:cv2.imwrite(str(out/f'{ep.name}_{t:04d}.jpg'),np.concatenate(images[t]))
  print(ep.name,'shift_mm',np.round(moves,2).tolist(),flush=True)
  (out/'metrics.json').write_text(json.dumps({'definition':'pass: >=90% material depth points within 10mm of mesh planes; visible render median depth <5mm; >=100 points/pixels; automatic current-observation proxy, not labelled IoU','records':records},indent=2))
