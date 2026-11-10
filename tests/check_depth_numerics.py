@@ -27,3 +27,20 @@ assert np.allclose(fit[:2,3],T[:2,3],atol=1e-8)
 assert abs(fit[2,3])<1e-6
 assert np.allclose(fit[:3,:3],np.eye(3),atol=1e-8)
 print('PASS: planar ICP fixes observable depth, preserves unobservable lateral/yaw prediction')
+
+# Co-motion alone must not attach a pushed object; require support from below.
+u=np.linspace(-.015,.015,10);x,y=np.meshgrid(u,u)
+bottom=np.c_[x.ravel(),y.ravel(),np.zeros(x.size)]
+child=SimpleNamespace(samples=np.vstack([bottom,bottom+[0,0,.03]]))
+parent=SimpleNamespace(icp_pts=p,icp_nrm=np.tile([0.,0.,1.],(len(p),1)))
+scene=SimpleNamespace(plane=(np.array([0.,0.,1.]),0),objs={'child':child,'parent':parent},state={'parent':SimpleNamespace(T=np.eye(4))})
+Tc=np.eye(4);Tc[2,3]=.002
+assert MeshTracker.supported_by(scene,'child','parent',Tc)
+scene.plane[0][:]=[0,0,2]
+assert MeshTracker.supported_by(scene,'child','parent',Tc)
+assert np.array_equal(scene.plane[0],[0,0,2])
+Tc[0,3]=.3
+assert not MeshTracker.supported_by(scene,'child','parent',Tc)
+Tc[0,3]=0;parent.icp_nrm[:]=[1,0,0]
+assert not MeshTracker.supported_by(scene,'child','parent',Tc)
+print('PASS: supported carry accepts an underside on a floor, rejects separation and vertical pushing contact')

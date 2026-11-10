@@ -183,7 +183,7 @@ class MeshTracker:
     # -------------------------------------------------------------- main step
     def supported_by(self, child, parent, Tchild):
         """Current geometry: a substantial underside rests on an upward surface."""
-        n=np.asarray(self.plane[0] if self.plane is not None else [0.,0.,1.],float);n/=np.linalg.norm(n)
+        n=np.array(self.plane[0] if self.plane is not None else [0.,0.,1.],dtype=float,copy=True);n/=np.linalg.norm(n)
         o=self.objs[child];p=self.objs[parent];Tp=self.state[parent].T
         W=o.samples@Tchild[:3,:3].T+Tchild[:3,3];height=W@n
         bottom=W[height<=np.percentile(height,20)]
