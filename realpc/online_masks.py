@@ -174,3 +174,36 @@ class OnlineObjectSegmenter:
             # geometry-only pose was a seed, not an emitted tracker state.
             conv.trk=None
         return out
+
+    def reacquire_empty(self,frames,q,labels):
+        """Re-prompt a forgotten object only with current depth-confirmed mesh evidence.
+        Called on recovery packets, never on ordinary tracking frames. Retains
+        the other objects' appearance memory and seeds no unseen object.
+        """
+        from sam2.sam2_image_predictor import SAM2ImagePredictor
+        changes=[]
+        for c,lab in labels.items():
+            D,im=frames[c];image=cv2.resize(im,(lab.shape[1],lab.shape[0]))
+            seeds,zbufs,ids=render_seeds(self.conv,c,lab.shape,q)
+            depth=cv2.resize(D,(lab.shape[1],lab.shape[0]),interpolation=0)
+            rz=np.minimum.reduce([np.where(z>0,z,np.inf) for z,i in zip(zbufs,ids) if i>=254])
+            predictor=None
+            for oid,seed in seeds.items():
+                if oid>=254 or (lab==oid).sum()>=40:continue
+                z=zbufs[ids.index(oid)];support=seed&(depth>.1)&(abs(depth-z)<.015)
+                if support.sum()<60:continue
+                if predictor is None:
+                    predictor=SAM2ImagePredictor(self.model)
+                    with torch.inference_mode(),torch.autocast('cuda',dtype=torch.bfloat16):predictor.set_image(cv2.cvtColor(image,cv2.COLOR_BGR2RGB))
+                yy,xx=np.nonzero(z>0);box=np.array([max(0,xx.min()-6),max(0,yy.min()-6),min(lab.shape[1]-1,xx.max()+6),min(lab.shape[0]-1,yy.max()+6)],np.float32)
+                distance=cv2.distanceTransform(support.astype(np.uint8),cv2.DIST_L2,5);y,x=np.unravel_index(distance.argmax(),distance.shape)
+                with torch.inference_mode(),torch.autocast('cuda',dtype=torch.bfloat16):
+                    masks,_,_=predictor.predict(point_coords=np.array([[x,y]],np.float32),point_labels=np.ones(1,np.int32),box=box,multimask_output=False)
+                mask=masks[0].astype(bool);mask &= ~((rz<np.inf)&(depth>.1)&(rz<=depth+.012))
+                if (mask&support).sum()<.5*support.sum() or mask.sum()>2.5*(z>0).sum():continue
+                memory=self.memory[c]
+                with torch.inference_mode(),torch.autocast('cuda',dtype=torch.bfloat16):
+                    self.model.add_new_mask(memory.state,frame_idx=memory.t,obj_id=int(oid),mask=mask)
+                lab[lab==oid]=0;lab[mask]=oid
+                changes.append({'camera':c,'object':self.conv.objs[oid-1].name,'depth_seed_pixels':int(support.sum()),'mask_pixels':int(mask.sum())})
+        return changes

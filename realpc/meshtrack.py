@@ -378,7 +378,7 @@ class MeshTracker:
                             best = (T1, res)
                     if best is None:                                  # mask present, pose far off: re-localize
                         st.lost += 1
-                        if st.lost >= 3 and (st.lost - 3) % 15 == 0 and len(M) >= 300 and self.lib_points is not None:
+                        if not depth_observation and st.lost >= 3 and (st.lost - 3) % 15 == 0 and len(M) >= 300 and self.lib_points is not None:
                             from . import objlib
                             Pl, Cl = self.lib_points[o.name]
                             Tr, fit, rmse = objlib.register(Pl, Cl, M, np.full((len(M), 3), 0.5), voxel=0.004, seed=self.tick)

@@ -25,27 +25,24 @@ class DepthMeshPipeline:
                 st.lost=max(st.lost,2)
                 if st.held is not None:
                     st.T=rob[st.held]['G']@st.T_grip_obj
-                others=[o.samples@c.trk.state[k].T[:3,:3].T+c.trk.state[k].T[:3,3] for k,o in c.trk.objs.items() if k!=n and c.trk.state[k].valid]
-                health=self.last_health.get(n,{})
-                severe=health.get('free_fraction',0)>.7 or health.get('support',0)<30
-                T=c.trk.relocalize(c.trk.objs[n],views,rob,others) if severe else None
-                if T is not None:
-                    st.T=T;st.valid=True;st.carrier=None;st.T_car_obj=None
-                    if st.held is not None:
-                        from scipy.spatial import cKDTree
-                        W=c.trk.objs[n].samples@T[:3,:3].T+T[:3,3]
-                        arm=rob[st.held];tree=cKDTree(W)
-                        contact=max(tree.query(f)[0].min() for f in arm['fingers'])<.035
-                        if not contact or arm['grip']>st.grip_at_grasp+.05:
-                            st.held=None;st.T_grip_obj=None
-                        else:st.T_grip_obj=np.linalg.inv(arm['G'])@T
                 self.last_recovery[n]=t;self.bad[n]=0
         from .online_masks import OnlineObjectSegmenter
         if self.segmenter is None:self.segmenter=OnlineObjectSegmenter(c,self.model,reset_tracker_on_seed=initial)
         # Retain appearance memory, but feed SAM only event frames. Skipped
         # packets are never encoded or queued for later processing.
         labels=self.segmenter.step(t,frames,q=q)
-        self.events.append({'tick':int(t),'reason':'initialize' if initial else 'reacquire','objects':[o.name for o in c.objs] if initial else list(self.pending),'trigger':{} if initial else {n:self.last_health.get(n,{}) for n in self.pending},'camera_calls':len(labels),'seconds':time.perf_counter()-start})
+        prompts=self.segmenter.reacquire_empty(frames,q,labels) if not initial else []
+        if not initial:
+            for v in views:v.labels=labels.get(v.name)
+            for n in self.pending:
+                st=c.trk.state[n]
+                if st.held is None:continue
+                lid=list(c.trk.objs).index(n)+1;M=np.concatenate([v.masked_points(lid) for v in views])
+                if len(M)>=60:
+                    distance=c.trk.objs[n].tree.query((M-st.T[:3,3])@st.T[:3,:3])[0]
+                    if np.median(distance)>.035 and rob[st.held]['grip']>st.grip_at_grasp+.03:
+                        st.held=None;st.T_grip_obj=None
+        self.events.append({'tick':int(t),'reason':'initialize' if initial else 'reacquire','objects':[o.name for o in c.objs] if initial else list(self.pending),'trigger':{} if initial else {n:self.last_health.get(n,{}) for n in self.pending},'reprompts':prompts,'camera_calls':len(labels),'seconds':time.perf_counter()-start})
         return labels
 
     def step(self,t,frames,q=None):
