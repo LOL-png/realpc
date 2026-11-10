@@ -30,6 +30,9 @@ ap.add_argument("--assets", default=os.path.join(ROOT, "assets", "objects"))
 ap.add_argument("--start", type=int, default=0); ap.add_argument("--stop", type=int, default=None); ap.add_argument("--cold", action="store_true")
 ap.add_argument("--cloth_tracks", default=os.path.expanduser("~/point_tracker/reports/REALDATA_SE3_1108/tracks/cloth_greycloth.npz"))
 ap.add_argument("--cloth_valid_until", type=int, default=160, help="cloth v1 is valid before the fold (report table)")
+ap.add_argument('--cloth_cot_inputs',help='Zero-lookahead CoTracker current packets')
+ap.add_argument("--cloth_causal_inputs", help="Current-frame RGB/depth/FK/mask packets for CausalClothTracker; overrides old cloth export")
+ap.add_argument("--cloth_causal_config", help="cloth_causal_track config.json (same tracker parameters as live inference)")
 ap.add_argument("--skip_existing", action="store_true")
 ap.add_argument("--seg_dir", default=os.path.expanduser("~/data_ext/realpc_v4/seg"), help="causal object masks (segment_objects.py)")
 a = ap.parse_args()
@@ -68,12 +71,32 @@ for epp in a.episodes:
     obj_held = np.zeros((P, len(ticks)), np.int8)
     obj_support = np.zeros((P, len(ticks), 2), np.int32); obj_mode = np.full((P, len(ticks)), "", dtype="<U16")
     qL = np.zeros((len(ticks), 7)); qR = np.zeros((len(ticks), 7))
+    cloth = None; cloth_samples=[]; cloth_observed=[]; cloth_metrics=[]
+    if ep.task == 'greycloth' and a.cloth_causal_inputs:
+        if a.start != 0:raise ValueError('Causal cloth conversion must start at t0 or restore its past state')
+        from realpc.cloth_causal import CausalClothTracker, at_image
+        from realpc.cloth_inputs import project
+        options=json.load(open(a.cloth_causal_config)) if a.cloth_causal_config else {}
+        keys=('cell','arap','data','track','pin','wrists','dense','coverage','predict','plane','strain_limit','wrist_flow','template','grasp_layers','cot_weight','cot_anchor','motion_scale','robust_depth')
+        cloth=CausalClothTracker(**{k:options[k] for k in keys if k in options})
     for k, t in enumerate(ticks):
         frames = {}
         for c in ("top", "side"):
             _, D = ds[c].next(); ok, im = caps[c].read()
             frames[c] = (D.astype(np.float32) * sc[c], im)
         o = conv.step(int(t), frames)
+        if cloth is not None:
+            # Identical live step API: never preload a future cloth packet.
+            with np.load(os.path.join(a.cloth_causal_inputs,'frames',f'{t:04d}.npz')) as z:
+                packet={key:z[key] for key in z.files}
+            if a.cloth_cot_inputs:
+                with np.load(os.path.join(a.cloth_cot_inputs,f'{t:04d}.npz')) as z:packet.update({key:z[key] for key in z.files})
+            _,cm,views=cloth.step(int(t),packet,iters=options.get('iters',5))
+            S=cloth.cm.samples()[:4000];observed=np.zeros(len(S),bool)
+            for c in ('top','side'):
+                uv,zz=project(S,views[c]['K'],views[c]['T']);dd,inside=at_image(views[c]['D'],uv)
+                observed |= inside&(dd>.08)&(np.abs(zz-dd)<.012)
+            cloth_samples.append(S.astype(np.float32));cloth_observed.append(observed);cloth_metrics.append(cm)
         if k % 50 == 0:
             print(f"{ep.task}/{ep.name} tick={t} elapsed={time.time()-t0:.1f}s", flush=True)
         robot_T[k] = o["robot_T"]; qL[k] = o["q"]["left"]; qR[k] = o["q"]["right"]
@@ -104,7 +127,18 @@ for epp in a.episodes:
         res["obj_color"] = np.concatenate(cols).astype(np.uint8)
     # cloth (greycloth): cloth v1 tracks (old recorder calibration) mapped into the v3 world: every camera-measured
     # point moves by the same rig correction C = T_world_top(v3) . T_world_top(recorder)^-1
-    if ep.task == "greycloth" and os.path.exists(a.cloth_tracks) and ep.name == "episode_0000":
+    if cloth is not None:
+        res['cloth_points']=np.stack(cloth_samples,axis=1)
+        res['cloth_observed']=np.stack(cloth_observed,axis=1)
+        # Whole-frame gate remains conservative during unverified material folds.
+        res['cloth_valid']=np.array([min(m['cameras'][c]['surface_coverage_10mm'] for c in ('top','side'))>.85
+            and m['edge_ratio_p5_p50_p95'][2]<1.35 for m in cloth_metrics])
+        res['cloth_variant']=np.array('causal_material_mesh_v2');res['cloth_coordinate_frame']=np.array('v3_world')
+        res['cloth_geometry_observed_only']=np.array(True)
+        from scipy.spatial import cKDTree
+        keep=cKDTree(res['cloth_points'][:,0]).query(res['static_points'])[0]>.015
+        res['static_points'],res['static_color']=res['static_points'][keep],res['static_color'][keep]
+    elif ep.task == "greycloth" and os.path.exists(a.cloth_tracks) and ep.name == "episode_0000":
         d = np.load(a.cloth_tracks, allow_pickle=True)
         cl = d["group"] == 4
         Pc = d["pos"][cl]; ct = d["ticks"]
@@ -122,6 +156,8 @@ for epp in a.episodes:
         res["static_points"], res["static_color"] = res["static_points"][keep], res["static_color"][keep]
     os.makedirs(os.path.dirname(out_p), exist_ok=True)
     np.savez_compressed(out_p, **res)
+    if cloth is not None:
+        json.dump(cloth_metrics,open(out_p.replace('.npz','_cloth_metrics.json'),'w'))
     qa = {"episode": f"{ep.task}/{ep.name}", "ticks": int(len(ticks)), "seconds": round(time.time() - t0, 1),
           "n_robot": int(len(arms.local)), "n_static": int(len(res["static_points"])),
           "n_object": int(sum(len(o.samples) for o in conv.objs)), "n_cloth": int(res["cloth_points"].shape[0]) if "cloth_points" in res else 0,
