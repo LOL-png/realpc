@@ -181,6 +181,18 @@ class MeshTracker:
         return out
 
     # -------------------------------------------------------------- main step
+    def supported_by(self, child, parent, Tchild):
+        """Current geometry: a substantial underside rests on an upward surface."""
+        n=np.asarray(self.plane[0] if self.plane is not None else [0.,0.,1.],float);n/=np.linalg.norm(n)
+        o=self.objs[child];p=self.objs[parent];Tp=self.state[parent].T
+        W=o.samples@Tchild[:3,:3].T+Tchild[:3,3];height=W@n
+        bottom=W[height<=np.percentile(height,20)]
+        up=(p.icp_nrm@Tp[:3,:3].T)@n>.5
+        if up.sum()<20 or len(bottom)<10:return False
+        surface=p.icp_pts[up]@Tp[:3,:3].T+Tp[:3,3]
+        distance,j=cKDTree(surface).query(bottom)
+        return bool(((distance<.012)&((surface[j]-bottom)@n<.005)).mean()>=.3)
+
     def step(self, t, views: list, q: dict, T_world_base: dict, aux_views=None):
         """views: list of CamView for this tick (cameras whose content time ~ t). Returns {name: T_world_obj}."""
         self.tick = t
@@ -254,9 +266,11 @@ class MeshTracker:
                 # Material identity + preceding/FK pose gates the added bristles.
                 lab[green]=lid;v.labels=lab
         if self.cfg["depth_mesh"]:
-            for st in self.state.values():
+            for name,st in self.state.items():
                 if st.carrier is not None and st.T_car_obj is not None:
-                    st.T=self.state[st.carrier].T@st.T_car_obj
+                    prediction=self.state[st.carrier].T@st.T_car_obj
+                    if self.supported_by(name,st.carrier,prediction):st.T=prediction
+                    else:st.carrier=None;st.T_car_obj=None
         # object z-buffers (inter-object occlusion), with predicted poses
         obj_z = {}
         for name, st in self.state.items():
@@ -307,6 +321,11 @@ class MeshTracker:
                 car = self.state[st.carrier]
                 if car.held is None and np.linalg.norm(moved.get(st.carrier, np.eye(4))[:3, 3]) < 0.002:
                     st.carrier, st.T_car_obj = None, None                       # carrier put down: object rests
+                elif self.cfg["depth_mesh"]:
+                    # FK motion already predicted the supported child above.
+                    # Correcting the tool's estimated pose is NOT another
+                    # physical motion of the child in this same frame.
+                    st.T_car_obj=np.linalg.inv(car.T)@st.T
                 else:
                     st.T = car.T @ st.T_car_obj
             # ---- mask-backed update (object masks from the causal segmenter): the main path
@@ -498,15 +517,13 @@ class MeshTracker:
         # A block near a moving tool is not necessarily riding it. Require observed
         # contact and co-motion over three ticks before assigning a rigid carrier.
         for name,st in self.state.items():
-            # Depth proximity / brief co-motion cannot establish a rigid grasp
-            # between two free surfaces. In depth mode retain neighbour motion
-            # as an ICP hypothesis, never as an attachment through a later dump.
-            if self.cfg["depth_mesh"] or getattr(self.objs[name],"passive_fixture",False) or st.held is not None or st.carrier is not None or sum(st.support.values())<60:
+            if getattr(self.objs[name],"passive_fixture",False) or st.held is not None or st.carrier is not None or sum(st.support.values())<60:
                 continue
             o=self.objs[name];W=o.samples@st.T[:3,:3].T+st.T[:3,3];tree=cKDTree(W)
             for parent,car in self.state.items():
                 if parent==name or car.held is None or np.linalg.norm(o.mesh.extents)>=.5*np.linalg.norm(self.objs[parent].mesh.extents):
                     continue
+                if self.cfg["depth_mesh"] and not self.supported_by(name,parent,st.T):continue
                 pred=car.T@np.linalg.inv(prevT[parent])@prevT[name]
                 Q=self.objs[parent].samples[::3]@car.T[:3,:3].T+car.T[:3,3]
                 near=tree.query(Q)[0].min()<.020
