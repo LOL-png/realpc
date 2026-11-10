@@ -81,9 +81,17 @@ class ObjectMaskStream:
                     for ip,pt in enumerate(points):cv2.circle(debug,tuple(map(int,pt)),4,(0,255,0) if ip<pos_count else (255,0,255),-1)
                     debug[refined]=(.35*np.array([0,0,255])+.65*debug[refined]).astype(np.uint8)
                     if debug_dir is not None:cv2.imwrite(os.path.join(debug_dir,f"seed{oid}.jpg"),debug)
-                    if not cold:
-                        # Keep RGB boundary refinement local to a calibrated model prior;
-                        # discard attached background lobes outside that uncertainty band.
+                    # A clear, depth-supported cold pose deserves the same local
+                    # uncertainty guard as a warm pose. Occluded starts retain the
+                    # wider amodal mask needed to discover a hidden handle.
+                    amodal=zbufs[ids.index(oid)]>0;predicted=zbufs[ids.index(oid)]
+                    observed=cv2.resize(depth,(w,h),interpolation=cv2.INTER_NEAREST)
+                    rz=np.minimum.reduce([np.where(zbufs[j]>0,zbufs[j],np.inf) for j,k in enumerate(ids) if k>=254])
+                    near_robot=cv2.dilate(((rz<np.inf)&(rz<predicted+.020)&amodal).astype(np.uint8),np.ones((9,9),np.uint8)).astype(bool)
+                    unoccluded=(amodal&~near_robot).sum()/max(1,amodal.sum())
+                    agreement=(amodal&(observed>.1)&(abs(observed-predicted)<.025)).sum()/max(1,amodal.sum())
+                    local_guard=not cold or (unoccluded>.98 and agreement>.65)
+                    if local_guard:
                         refined &= cv2.dilate(m.astype(np.uint8),np.ones((17,17),np.uint8)).astype(bool)
                     coverage = (refined & m).sum() / max(1,m.sum())
                     # Cold pose hypotheses are uncertain: demanding 72% overlap with

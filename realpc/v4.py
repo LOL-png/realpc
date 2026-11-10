@@ -228,8 +228,26 @@ class StreamConverter:
                 if c not in frames:continue
                 G=LP[self.arms.bodies.index((arm_,"gripper"))];Twc=G@A@np.asarray(self.ep.calib["X_"+arm_])
                 aux.append(CamView(c,frames[c][0],self.ep.intrinsics(c),Twc,rgb=frames[c][1],lowres=(240,320)))
-        # Passive tray: current RGB-D supports sliding/yaw; it never follows a hand.
+        # Passive tray: a resting pose needs no visual nudging. Refit near a
+        # physical contact, or during initial acquisition; foreground occlusions
+        # alone must not move a stationary box.
         if "box" in self.trk.state:
+            from scipy.spatial import cKDTree
+            st=self.trk.state["box"];box=self.trk.objs["box"]
+            contact=False
+            if st.valid:
+                W=box.samples@st.T[:3,:3].T+st.T[:3,3];tree=cKDTree(W)
+                contact=bool(tree.query(self.arms.points(q)[::8])[0].min()<.020)
+                for name,other in self.trk.state.items():
+                    if name=="box" or not other.valid:continue
+                    moving=other.held is not None or (len(other.history)>1 and np.linalg.norm(other.history[-1][:3,3]-other.history[-2][:3,3])>.001)
+                    if moving:
+                        Q=self.trk.objs[name].samples[::4]@other.T[:3,:3].T+other.T[:3,3]
+                        contact |= bool(tree.query(Q)[0].min()<.020)
+            if contact:self.box_contact_until=t+10
+            st.allow_fixture_update=(t-self.start<5 or t<=getattr(self,"box_contact_until",-1) or not st.valid)
+            self.box_diagnostic={"contact":contact,"allow_update":st.allow_fixture_update}
+        if "box" in self.trk.state and self.trk.state["box"].allow_fixture_update:
             from .box_fixture import update_box_pose
             pp=[];cc=[]
             for c in ("top","side"):
@@ -244,7 +262,7 @@ class StreamConverter:
                 except ValueError:pass
             detail={"observed":bool(st.valid)}
             if st.valid:st.T,detail=update_box_pose(st.T,np.concatenate(pp),np.concatenate(cc),meta["dimensions_m"],meta.get("wall_planes"))
-            self.box_diagnostic=detail
+            self.box_diagnostic.update(detail)
         poses = self.trk.step(t, views, q, self.T_world_base,aux_views=aux)
         out = {"q": q, "robot_T": self.arms.link_poses(q).astype(np.float32), "obj_T": {}, "obj_res": {}, "obj_held": {}}
         for o in self.objs:

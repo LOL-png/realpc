@@ -265,7 +265,7 @@ class MeshTracker:
                 st.mode="unobserved";out[name]=np.full((4,4),np.nan);continue
             if getattr(o,"passive_fixture",False):
                 st.mode="passive_fixture";st.held=None;st.carrier=None
-                if name=="box" and (t-self.first_tick)%5==0:
+                if name=="box" and getattr(st,"allow_fixture_update",True) and (t-self.first_tick)%5==0:
                     from .box_fixture import refine_box_silhouette
                     st.T,self.box_silhouette=refine_box_silhouette(o,st.T,views,robot_z)
                 st.last_res=self.residual(o,st.T,views,robot_z,obj_z,name)

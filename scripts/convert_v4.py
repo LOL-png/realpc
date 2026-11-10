@@ -6,6 +6,8 @@
 Library per task: assets/objects/<task>/ (no library = robot + static only; greycloth adds the cloth v1 tracks).
 """
 import argparse
+import hashlib
+from pathlib import Path
 import json
 import os
 import subprocess
@@ -31,6 +33,7 @@ ap.add_argument("--start", type=int, default=0); ap.add_argument("--stop", type=
 ap.add_argument("--cloth_tracks", default=os.path.expanduser("~/point_tracker/reports/REALDATA_SE3_1108/tracks/cloth_greycloth.npz"))
 ap.add_argument("--cloth_valid_until", type=int, default=160, help="cloth v1 is valid before the fold (report table)")
 ap.add_argument("--skip_existing", action="store_true")
+ap.add_argument("--preview-every",type=int,default=0,help="save atomic partial pose snapshots for quick visual validation")
 ap.add_argument("--online-seg", action="store_true", help="run the same current-frame segmenter used live instead of replaying cached masks")
 ap.add_argument("--sam-ckpt",default="/home/howardji/realpc/.model_cache/sam2/sam2.1_hiera_small.pt")
 ap.add_argument("--seg_dir", default=os.path.expanduser("~/data_ext/realpc_v4/seg"), help="causal object masks (segment_objects.py)")
@@ -66,6 +69,10 @@ for epp in a.episodes:
         from realpc.online_masks import OnlineObjectSegmenter
         model=build_sam2_video_predictor("configs/sam2.1/sam2.1_hiera_s.yaml",a.sam_ckpt,device="cuda")
         conv.seg={};segmenter=OnlineObjectSegmenter(conv,model)
+    os.makedirs(os.path.dirname(out_p),exist_ok=True)
+    source_files=list(Path(ROOT,"realpc").glob("*.py"))+[Path(a.calib)]+list(Path(lib).glob("*.ply"))+list(Path(lib).glob("*.json"))
+    run_manifest={"commit":commit,"initialization":"current RGB-D","online_seg":a.online_seg,"start":a.start,"code_asset_sha256":{str(p.relative_to(Path(ROOT).resolve())) if p.is_relative_to(Path(ROOT).resolve()) else str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in source_files},"settings":{k:os.environ.get(k) for k in ["REALPC_SIL","REALPC_CAM_EQUAL","REALPC_SIL_METHOD","REALPC_COLD_COMPONENTS","REALPC_BROOM_MATERIAL","REALPC_BROOM_CLEAN_MASK","REALPC_BROOM_HOLE","REALPC_WRIST_WEIGHT","REALPC_BROOM_REJECT_BG"]}}
+    json.dump(run_manifest,open(out_p[:-4]+"_run.json","w"),indent=2)
     T_total = len(ep.low["t_cap"]); stop = min(a.stop or T_total, T_total)
     ticks = np.arange(a.start, stop)
     cams=["top","side"]+([c for c in ("left_wrist","right_wrist") if os.path.exists(os.path.join(ep.path,c+"_depth.mkv"))] if ep.task=="sweep" and os.environ.get("REALPC_BROOM_MATERIAL","0")=="1" else [])
@@ -96,6 +103,10 @@ for epp in a.episodes:
         for i, n in enumerate(names):
             obj_T[i, k] = o["obj_T"][n]; obj_res[i, k] = o["obj_res"][n]; obj_held[i, k] = o["obj_held"][n]
             obj_support[i, k] = o.get("obj_support", {}).get(n, (0, 0)); obj_mode[i, k] = o.get("obj_mode", {}).get(n, "")
+        if a.preview_every and k>0 and (k+1)%a.preview_every==0:
+            temporary=out_p[:-4]+"_partial_tmp.npz";preview=out_p[:-4]+"_partial.npz"
+            np.savez_compressed(temporary,ticks=ticks[:k+1],obj_names=np.array(names),obj_T=obj_T[:,:k+1],obj_valid=np.isfinite(obj_T[:,:k+1,0,0]),q_left=qL[:k+1].astype(np.float32),q_right=qR[:k+1].astype(np.float32),task=ep.task,episode=ep.name,partial=True)
+            os.replace(temporary,preview)
     for c in ds:
         ds[c].close()
     res = dict(ticks=ticks, t_cap=ep.low["t_cap"][ticks], q_left=qL.astype(np.float32), q_right=qR.astype(np.float32),
