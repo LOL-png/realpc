@@ -5,11 +5,17 @@
   "assets": "assets/objects_v3",
   "initialization": "current RGB-D only; no episode-specific pose lookup",
   "environment": {
-    "REALPC_SIL": "1", "REALPC_CAM_EQUAL": "1", "REALPC_SIL_METHOD": "contour",
-    "REALPC_COLD_COMPONENTS": "1", "REALPC_BROOM_MATERIAL": "1",
-    "REALPC_BROOM_CLEAN_MASK": "0", "REALPC_BROOM_HOLE": "0",
-    "REALPC_WRIST_WEIGHT": "1", "REALPC_BROOM_REJECT_BG": "0"
+    "REALPC_SIL": "1",
+    "REALPC_CAM_EQUAL": "1",
+    "REALPC_SIL_METHOD": "contour",
+    "REALPC_COLD_COMPONENTS": "1",
+    "REALPC_BROOM_MATERIAL": "1",
+    "REALPC_BROOM_CLEAN_MASK": "0",
+    "REALPC_BROOM_HOLE": "0",
+    "REALPC_WRIST_WEIGHT": "1",
+    "REALPC_BROOM_REJECT_BG": "0"
   },
   "optional_experiments": "Mask cleanup and explicit hole term are implemented but NOT enabled: no joint-camera improvement established.",
-  "box": "Passive fixture with current-observation planar pose updates; never gripper-attached; invalid while unlocated."
+  "box": "Passive fixture: current-observation planar pose updates only during acquisition or near robot/moving-object contact (20mm, 10-tick grace); never gripper-attached; invalid while unlocated.",
+  "mask_initialization": "Current RGB/depth and FK seeds. Tight local mask guard only for predicted visibility >98% and depth agreement >65%; wider allowance under occlusion."
 }

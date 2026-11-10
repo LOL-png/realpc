@@ -14,7 +14,8 @@ from realpc.config import load_config
 p=argparse.ArgumentParser();p.add_argument('--converted',required=True);p.add_argument('--tracker-seg-dir');p.add_argument('--reference-name',default='self');p.add_argument('--assets',default='assets/objects_v3');p.add_argument('--every',type=int,default=8);p.add_argument('--out',required=True);p.add_argument('--visual',nargs='*',type=int,default=[0,100,250,400,500,650,800]);p.add_argument('--stop',type=int);p.add_argument('--video',action='store_true');p.add_argument('--scene-occlusion',action='store_true',help='depth occlusion for DISPLAY ONLY; scoring stays unchanged');a=p.parse_args();torch.set_num_threads(2);d=np.load(a.converted);task=str(d['task']);episode=str(d['episode']);ep=Episode('/home/howardji/data_ext/agentwm_probe/hf/'+task+'/'+episode);cal=RigCalib.load(ROOT/'configs/calib_yam_rig_v3.json');obs,_=load_library(str(Path(a.assets)/task),100);cfg=load_config(ROOT/'configs/yam_bimanual.json');r=cfg['robot'];arm=TorchArm(str(Path(cfg['_dir'])/r['urdf']),r['arm_joints'],r['finger_joints']);out=Path(a.out);out.mkdir(parents=True,exist_ok=True)
 names=list(d['obj_names']);idx={o.name:names.index(o.name) for o in obs};ticks=d['ticks'];ks=list(range(0,len(ticks),a.every));ks=[k for k in ks if a.stop is None or ticks[k]<a.stop];vs={int(np.argmin(abs(ticks-t))) for t in a.visual if ticks[0]<=t<=ticks[-1]};ks=sorted(set(ks)|vs);rows={};scores={a.reference_name:{},'independent':{}};per={a.reference_name:{},'independent':{}}
 if a.tracker_seg_dir:scores['tracker']={};per['tracker']={}
-colors=[(0,200,255),(255,120,0),(0,255,120)]
+palette={"box":(0,200,255),"broom":(255,120,0),"debris":(0,255,120),"dustpan":(220,70,220),"mug":(0,200,255),"stand":(255,120,0)}
+colors=[palette.get(o.name,(180,180,180)) for o in obs]
 for cam in ['top','side']:
  z=np.load('/home/howardji/data_ext/realpc_v4/seg/'+task+'/'+episode+'_'+cam+'.npz');raw=z['labels'];ln=['background']+list(z['names']);labelsets={a.reference_name:(np.stack([cv2.resize(raw[int(ticks[k])],(320,180 if cam=='top' else 240),interpolation=0) for k in ks]),ln,[254,255])};del raw
  if a.tracker_seg_dir:
@@ -49,7 +50,7 @@ for cam in ['top','side']:
     depth=cv2.resize(depth.astype(np.float32)*float(ep.meta['depth_scale'][cam]),(320,R.H),interpolation=cv2.INTER_NEAREST)
     display_vis=[m&((depth<.1)|(z<=depth+.015)) for m,z in zip(vis,zs)]
    for i,m in enumerate(display_vis):
-    ov[m]=(.22*np.array(colors[i%3])+.78*ov[m]).astype(np.uint8);cs,_=cv2.findContours(m.astype(np.uint8),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE);cv2.drawContours(ov,cs,-1,colors[i%3],1)
+    ov[m]=(.22*np.array(colors[i])+.78*ov[m]).astype(np.uint8);cs,_=cv2.findContours(m.astype(np.uint8),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE);cv2.drawContours(ov,cs,-1,colors[i],1)
    row=np.concatenate([im,ov],1);cv2.putText(row,f'{task}/{episode} {cam} t={t}',(5,18),0,.5,(255,255,255),1);row=cv2.copyMakeBorder(row,0,240-R.H,0,0,0)
    if writer is not None:writer.write(row)
    if k in vs:rows.setdefault(t,[]).append(row)

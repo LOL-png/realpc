@@ -37,7 +37,7 @@ Stand revision v3.1 (Q30): four observed peg ends, two per height, verified acro
 
 ## Sweep box and shared streaming update
 
-The box mesh is approximately 26.3 × 17.9 × 7.9 cm. Four wall planes and the floor come from 50 two-camera scans; 3 mm thickness is a prior, and upper-edge notches are simplified. It is a passive fixture, not assumed immobile: current observations can update sliding/yaw, but it never attaches to a gripper. An unlocatable cold-start box remains invalid until reacquired.
+The box mesh is approximately 26.3 × 17.9 × 7.9 cm. Four wall planes and the floor come from 50 two-camera scans; 3 mm thickness is a prior, and upper-edge notches are simplified. It is a passive fixture, not assumed immobile: current observations can update sliding/yaw during acquisition or likely contact, but it never attaches to a gripper. Away from contact it retains its pose to avoid chasing foreground occlusion. An unlocatable cold-start box remains invalid until reacquired.
 
 `configs/rigid_tracking_selected_1109.json` records the selected defaults. The broom uses current multiview bristle evidence, supported wrist observations, FK prediction and a full-object acceptance guard. More aggressive mask cleanup and a separate hole constraint remain disabled experiments because no reliable joint-camera gain was established.
 
