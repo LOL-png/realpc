@@ -34,6 +34,7 @@ ap.add_argument("--cloth_tracks", default=os.path.expanduser("~/point_tracker/re
 ap.add_argument("--cloth_valid_until", type=int, default=160, help="cloth v1 is valid before the fold (report table)")
 ap.add_argument("--skip_existing", action="store_true")
 ap.add_argument("--preview-every",type=int,default=0,help="save atomic partial pose snapshots for quick visual validation")
+ap.add_argument("--save-seg-dir",help="optional QA cache of labels used at each tick; export excluded from timing")
 ap.add_argument("--depth-mesh",action="store_true",help="depth/mesh tracking; SAM only at initialization or failed-fit recovery")
 ap.add_argument("--online-seg", action="store_true", help="run the same current-frame segmenter used live instead of replaying cached masks")
 ap.add_argument("--sam-ckpt",default="/home/howardji/realpc/.model_cache/sam2/sam2.1_hiera_small.pt")
@@ -94,7 +95,7 @@ for epp in a.episodes:
     obj_T = np.full((P, len(ticks), 4, 4), np.nan, np.float32); obj_res = np.full((P, len(ticks), 2), np.nan, np.float32)
     obj_held = np.zeros((P, len(ticks)), np.int8)
     obj_support = np.zeros((P, len(ticks), 2), np.int32); obj_mode = np.full((P, len(ticks)), "", dtype="<U16")
-    broom_diagnostics=[];step_times=[];input_times=[]
+    broom_diagnostics=[];step_times=[];input_times=[];used_masks={}
     qL = np.zeros((len(ticks), 7)); qR = np.zeros((len(ticks), 7))
     for k, t in enumerate(ticks):
         input_start=time.perf_counter()
@@ -106,6 +107,10 @@ for epp in a.episodes:
         labels=segmenter.step(int(t),frames) if segmenter is not None else None
         o = depth_pipeline.step(int(t),frames) if depth_pipeline is not None else conv.step(int(t), frames,labels=labels)
         step_times.append(time.perf_counter()-step_start)
+        if a.save_seg_dir:
+            for v in conv.trk.prev:
+                if v.labels is not None:
+                    used_masks.setdefault(v.name,[]).append(cv2.resize(v.labels,(640,360 if v.name=="top" else 480),interpolation=0))
         if hasattr(conv.trk,"broom_refiner"):broom_diagnostics.append({"tick":int(t),**conv.trk.broom_refiner.stats})
         if k % 50 == 0:
             print(f"{ep.task}/{ep.name} tick={t} elapsed={time.time()-t0:.1f}s", flush=True)
@@ -171,4 +176,8 @@ for epp in a.episodes:
     if depth_pipeline is not None:qa["depth_pipeline"]=depth_pipeline.summary()
     json.dump(qa, open(out_p[:-4] + "_qa.json", "w"), indent=1)
     print(json.dumps(qa), flush=True)
+    if a.save_seg_dir:
+        target=Path(a.save_seg_dir)/ep.task;target.mkdir(parents=True,exist_ok=True)
+        for c,labels_used in used_masks.items():
+            np.savez_compressed(target/(ep.name+'_'+c+'.npz'),labels=np.stack(labels_used),start=a.start,names=np.array(names),source='depth_geometry' if a.depth_mesh else 'SAM_current')
 json.dump(SCHEMA, open(os.path.join(a.out_dir, "schema.json"), "w"), indent=1)

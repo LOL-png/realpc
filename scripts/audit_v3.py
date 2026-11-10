@@ -42,7 +42,8 @@ for cam in ['top','side']:
     if max(gt.sum(),pred.sum())<60:continue
     iou=float((gt&pred).sum()/max(1,(gt|pred).sum()));key=o.name+'/'+cam;per[mode].setdefault(key,[]).append([t,iou])
   if k in vs or a.video:
-   cap.set(0 if False else cv2.CAP_PROP_POS_FRAMES,t);ok,im=cap.read();im=cv2.resize(im,(320,R.H));ov=im.copy()
+   if int(cap.get(cv2.CAP_PROP_POS_FRAMES))!=t:cap.set(cv2.CAP_PROP_POS_FRAMES,t)
+   ok,im=cap.read();im=cv2.resize(im,(320,R.H));ov=im.copy()
    display_vis=vis
    if ds is not None:
     while depth_tick<t:

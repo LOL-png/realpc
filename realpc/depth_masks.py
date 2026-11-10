@@ -42,19 +42,27 @@ def associate_depth(tracker, views, robot_z, object_z):
             dist,_=tracker.objs[name].tree.query(L)
             # Permit small prediction errors; a distant surface never attracts ICP.
             usable=dist<.025
+            color_cost=np.zeros(len(idx))
             if rgb is not None and tracker.lib_points is not None:
                 from .objlib import colour_model
                 if not hasattr(tracker,"depth_color"):tracker.depth_color={}
                 if name not in tracker.depth_color:
                     tracker.depth_color[name]=colour_model(tracker.lib_points[name][1],tracker.bg_colors)
-                usable &= tracker.depth_color[name](rgb[idx])>.15
+                # Illumination / newly exposed faces can score zero despite valid
+                # geometry. Colour breaks ambiguous surface ownership; it must
+                # not erase depth support for a shadowed, moving object.
+                color_cost=.003*(1-tracker.depth_color[name](rgb[idx]))
             if not usable.any():continue
-            idx=idx[usable];score=dist[usable]
+            idx=idx[usable];score=(dist+color_cost)[usable]
             win=score<best.ravel()[idx]
             best.ravel()[idx[win]]=score[win];labels.ravel()[idx[win]]=oi
         labels[robot]=254
         v.labels=labels
         v.depth_generated=True
+        # Keep the exact returns that passed robot/table/surface rejection.
+        # Upsampling the labels onto other depth pixels can reintroduce foreground
+        # robot edges and table returns which were never tested above.
+        v.associated_points={oi:P[labels==oi] for oi in range(1,len(names)+1)}
         for oi,name in enumerate(names,1):diagnostics[name]['support']+=int((labels==oi).sum())
     for d in diagnostics.values():d['free_fraction']=d['free']/max(1,d['visible'])
     tracker.depth_diagnostics=diagnostics

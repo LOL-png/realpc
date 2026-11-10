@@ -107,6 +107,9 @@ class CamView:
 
     def masked_points(self, lid, max_n=1500, stride=2):
         """world points of the depth pixels whose label is `lid`."""
+        if getattr(self,"depth_generated",False):
+            P=self.associated_points.get(lid,np.zeros((0,3)))
+            return P if len(P)<=max_n else P[np.random.default_rng(0).choice(len(P),max_n,replace=False)]
         if self.labels is None:
             return np.zeros((0, 3))
         H, W = self.D.shape
@@ -319,11 +322,14 @@ class MeshTracker:
             st.mode = ("+".join(v.name for v, m_ in zip(views, Ms) if len(m_) >= self.cfg["cam_min_pts"]) or
                        ("fk" if st.held is not None else ("carrier" if st.carrier is not None else "hold")))
             mask_prediction = st.T.copy()
-            if self.cfg["depth_mesh"] and all(getattr(v,"depth_generated",False) for v in views) and st.held is None and st.carrier is None and not near_robot and not carriers:
+            depth_observation=self.cfg["depth_mesh"] and all(getattr(v,"depth_generated",False) for v in views)
+            depth_distance=o.tree.query((M-st.T[:3,3])@st.T[:3,:3])[0] if depth_observation and len(M) else np.zeros(0)
+            stationary_fit=len(depth_distance)>=self.cfg["mask_min_pts"] and np.median(depth_distance)<.004 and np.percentile(depth_distance,80)<.008
+            if depth_observation and st.held is None and st.carrier is None and not carriers and (stationary_fit or (not near_robot and len(M)<self.cfg["mask_min_pts"])):
                 # A resting object should not chase depth noise or slide along an
                 # underconstrained plane. Current ray evidence still detects loss.
                 if len(M):
-                    dd=o.tree.query((M-st.T[:3,3])@st.T[:3,:3])[0]
+                    dd=depth_distance
                     st.last_res=(float(np.median(dd)),len(dd))
                 else:st.last_res=(np.nan,0)
                 st.mode="rest_depth";moved[name]=np.eye(4);out[name]=st.T.copy();st.history.append(st.T.copy());continue
@@ -681,8 +687,22 @@ class MeshTracker:
             J = np.c_[np.cross(p, n), n]
             hub = self.cfg["huber"]
             wt = np.where(np.abs(r) < hub, 1.0, hub / np.maximum(np.abs(r), 1e-9)) * wc
-            H = (J * wt[:, None]).T @ J + 1e-5 * np.eye(6)
-            xi = np.linalg.solve(H, (J * wt[:, None]).T @ r)
+            if self.cfg["depth_mesh"]:
+                # Metric scaling makes rotational and translational observability
+                # comparable. Preserve the prediction in unconstrained modes
+                # (e.g. yaw of a pole, tangential motion of a planar patch).
+                radius=max(.02,float(np.sqrt(np.mean(np.sum(o.icp_pts**2,axis=1)))))
+                scale=np.r_[np.full(3,1/radius),np.ones(3)]
+                A=J*scale
+                H=(A*wt[:,None]).T@A
+                eig,U=np.linalg.eigh(H);g=(A*wt[:,None]).T@r
+                inv=np.where(eig>max(1e-8,.015*eig[-1]),1/np.maximum(eig,1e-8),0)
+                xi=scale*(U@(inv*(U.T@g)))
+                factor=max(1.,np.linalg.norm(xi[:3])/np.deg2rad(5),np.linalg.norm(xi[3:])/.02)
+                xi/=factor
+            else:
+                H = (J * wt[:, None]).T @ J + 1e-5 * np.eye(6)
+                xi = np.linalg.solve(H, (J * wt[:, None]).T @ r)
             T = T @ se3_small(xi)
             res = (float(np.median(np.abs(r))), int(ok.sum()))
             if np.linalg.norm(xi) < 1e-5:

@@ -20,4 +20,9 @@ from realpc.depth_masks import associate_depth
 n,offset=ep.table_plane();v=views[0];H,W=v.D.shape;yy,xx=np.mgrid[:H,:W];K=v.K;rays=np.stack([(xx-K[0,2])/K[0,0],(yy-K[1,2])/K[1,1],np.ones_like(xx)],-1)@v.Twc[:3,:3].T
 z=-(np.asarray(n)@v.Twc[:3,3]+offset)/(rays@np.asarray(n));v.D=np.where(z>.1,z,0).astype(np.float32);v.labels=None;P=o.verts_t@torch.tensor(st.T[:3,:3].T,device='cuda',dtype=torch.float32)+torch.tensor(st.T[:3,3],device='cuda',dtype=torch.float32);oz={'broom':[v.zbuf(P,o.faces_t).cpu().numpy()]};associate_depth(trk,[v],[np.full((v.R.H,v.R.W),1e9)],oz);assert not (v.labels==1).any();print('PASS: rendered object footprint cannot turn table-plane depth into object points')
 v.D=cv2.resize(oz['broom'][0],(W,H),interpolation=0);v.labels=None;associate_depth(trk,[v],[np.full((v.R.H,v.R.W),1e9)],oz);assert (v.labels==1).sum()>40
+v.labels=None;v.rgb=np.zeros((H,W,3),np.uint8)
+trk.lib_points={'broom':(None,None)};trk.depth_color={'broom':lambda C:np.zeros(len(C))}
+associate_depth(trk,[v],[np.full((v.R.H,v.R.W),1e9)],oz)
+assert (v.labels==1).sum()>40;assert len(v.masked_points(1))>40
+print('PASS: zero colour likelihood cannot erase valid mesh-associated depth')
 v.labels=None;rz=np.where(oz['broom'][0]>0,oz['broom'][0]-.005,1e9);associate_depth(trk,[v],[rz],oz);assert not (v.labels==1).any();print('PASS: foreground robot-render depth excludes otherwise valid object returns')
