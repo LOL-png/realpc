@@ -44,7 +44,7 @@ class CausalClothTracker:
         keys=inspect.signature(cls).parameters
         return cls(**{k:v for k,v in config.items() if k in keys})
 
-    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False, landmark_grasp=False, init_landmarks=False, native_init_gain=None, shirt_layers=2, init_registration_iters=0, init_registration_strain=50., init_registration_arap=.2, init_registration_data=8., init_registration_coverage=20., init_registration_bending=.2, init_registration_contour=80., init_registration_focus=1., feasible_predict=False, contact_clearance=0., contact_stiffness=1e9, shirt_asset=None, global_slide=False, contact_projection=False, constraint_restore=False, compression_soft=False, held_iters=0, held_step=.025, constraint_qp=False, grasp_init_iters=0, constraint_conic=False, coverage_surface=False, robot_margin_m=.009):
+    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False, landmark_grasp=False, init_landmarks=False, native_init_gain=None, shirt_layers=2, init_registration_iters=0, init_registration_strain=50., init_registration_arap=.2, init_registration_data=8., init_registration_coverage=20., init_registration_bending=.2, init_registration_contour=80., init_registration_focus=1., feasible_predict=False, contact_clearance=0., contact_stiffness=1e9, shirt_asset=None, global_slide=False, contact_projection=False, constraint_restore=False, compression_soft=False, held_iters=0, held_step=.025, constraint_qp=False, grasp_init_iters=0, constraint_conic=False, coverage_surface=False, robot_margin_m=.009, track_grasp=False):
         self.constraint_qp=constraint_qp;self.qp_active=False;self.constraint_conic=constraint_conic
         self.held_step=held_step
         self.held_iters=held_iters;self.grasp_init_iters=grasp_init_iters
@@ -59,7 +59,7 @@ class CausalClothTracker:
         self.init_registration_focus=init_registration_focus
         self.init_registration_contour=init_registration_contour
         self.init_registration_iters=init_registration_iters;self.init_registration_strain=init_registration_strain;self.init_registration_arap=init_registration_arap;self.init_registration_data=init_registration_data;self.init_registration_coverage=init_registration_coverage;self.init_registration_bending=init_registration_bending
-        self.robot_margin_m=robot_margin_m;self.coverage_surface=coverage_surface;self.shirt_layers=shirt_layers;self.native_init_gain=native_init_gain;self.init_landmarks=init_landmarks;self.landmark_grasp=landmark_grasp;self.visible_grasp=visible_grasp;self.back_on_table=back_on_table;self.dynamics_gain=dynamics_gain;self.native_init_iters=native_init_iters;self.table_contact=table_contact;self.support_occlusion=support_occlusion;self.cot_rays_only=cot_rays_only;self.ray_observations=[];self.boundary_grasp=boundary_grasp;self.grasp_seed={};self.init_iters=init_iters;self.coverage_radius=coverage_radius;self.flat_rest=flat_rest;self.silhouette=silhouette;self.dynamics=dynamics;self.endpoint_projection=endpoint_projection;self.idle_gate=idle_gate;self.max_stretch=max_stretch;self.ipc_contact=ipc_contact;self.strain_stiffness=strain_stiffness;self.joint_physics=joint_physics;self.bending=bending;self.gravity=gravity;self.point_grasp=point_grasp;self.length_slack=length_slack;self.paired_grasp=paired_grasp;self.paired_done=set();self.layer_visibility=layer_visibility;self.material_slack=material_slack;self.cell=cell;self.wa=arap;self.wd=data;self.wt=track;self.wp=pin;self.wrists=wrists
+        self.track_grasp=track_grasp;self.robot_margin_m=robot_margin_m;self.coverage_surface=coverage_surface;self.shirt_layers=shirt_layers;self.native_init_gain=native_init_gain;self.init_landmarks=init_landmarks;self.landmark_grasp=landmark_grasp;self.visible_grasp=visible_grasp;self.back_on_table=back_on_table;self.dynamics_gain=dynamics_gain;self.native_init_iters=native_init_iters;self.table_contact=table_contact;self.support_occlusion=support_occlusion;self.cot_rays_only=cot_rays_only;self.ray_observations=[];self.boundary_grasp=boundary_grasp;self.grasp_seed={};self.init_iters=init_iters;self.coverage_radius=coverage_radius;self.flat_rest=flat_rest;self.silhouette=silhouette;self.dynamics=dynamics;self.endpoint_projection=endpoint_projection;self.idle_gate=idle_gate;self.max_stretch=max_stretch;self.ipc_contact=ipc_contact;self.strain_stiffness=strain_stiffness;self.joint_physics=joint_physics;self.bending=bending;self.gravity=gravity;self.point_grasp=point_grasp;self.length_slack=length_slack;self.paired_grasp=paired_grasp;self.paired_done=set();self.layer_visibility=layer_visibility;self.material_slack=material_slack;self.cell=cell;self.wa=arap;self.wd=data;self.wt=track;self.wp=pin;self.wrists=wrists
         self.cm=None;self.tracks={};self.gray={};self.pins={};self.closed={};self.counter=0;self.tick=-1
         self.events=[];self.last_metrics={};self.dense=dense;self.prev_views=None;self.coverage=coverage;self.predict=predict;self.prev_X=None;self.prev_G={};self.plane=plane;self.strain_limit=strain_limit;self.wrist_flow=wrist_flow;self.template=template;self.grasp_layers=grasp_layers;self.cot_weight=cot_weight;self.cot_anchor=cot_anchor;self.cot={};self.cot_checks=[];self.motion_scale=motion_scale;self.robust_depth=robust_depth
 
@@ -311,6 +311,39 @@ class CausalClothTracker:
         U,_,Vh=np.linalg.svd(cov);R=Vh.transpose(0,2,1)@U.transpose(0,2,1)
         neg=np.linalg.det(R)<0;Vh[neg,-1]*=-1;return Vh.transpose(0,2,1)@U.transpose(0,2,1)
 
+    def tracked_contact_landmark(self,views,contact,candidates):
+        """Use old material tracks near the CURRENT observed pinch region.
+        Does not advance track state or use held-out evaluation tracks. A
+        confident material vote can override a nearby but incorrect mesh cuff.
+        """
+        material=[];weight=[];cameras=[]
+        for camera in CAMS[:2]:
+            old=self.tracks.get(camera);z=views[camera]
+            if old is None or not len(old['uv']) or camera not in self.gray:continue
+            p=old['uv'].astype(np.float32).reshape(-1,1,2)
+            uv,st,err=cv2.calcOpticalFlowPyrLK(self.gray[camera],z['gray'],p,None,winSize=(21,21),maxLevel=4,criteria=(3,30,.01))
+            back,sb,_=cv2.calcOpticalFlowPyrLK(z['gray'],self.gray[camera],uv,None,winSize=(21,21),maxLevel=4)
+            dep,inside=at_image(z['D'],uv[:,0]);Q=depth_points(uv[:,0],dep,z['K'],z['T'])
+            distance=np.linalg.norm(Q-contact,axis=1)
+            good=st[:,0].astype(bool)&sb[:,0].astype(bool)&inside&(dep>.08)
+            good &= (old['age']>=32)&~old['held']&(distance<.05)
+            good &= (np.linalg.norm(back[:,0]-p[:,0],axis=1)<.8)&(err[:,0]<22)
+            good &= np.linalg.norm(Q-old['Q'],axis=1)<.065*self.motion_scale
+            if good.any():
+                w=np.exp(-.5*(distance[good]/.03)**2);w/=w.sum()
+                material.extend(old['id'][good]);weight.extend(w);cameras.append(camera)
+        info=dict(source='nearest_mesh',track_count=len(material),track_cameras=cameras)
+        if len(np.unique(material))<3:return None,info
+        distances=dijkstra(self.graph,directed=False,indices=candidates)
+        scores=np.average(distances[:,material],axis=1,weights=weight)
+        order=np.argsort(scores);best,runner=order[:2]
+        if not np.isfinite(scores[order[:2]]).all():return None,info
+        info.update(material_distance_mm=float(scores[best]*1000),margin_mm=float((scores[runner]-scores[best])*1000))
+        if scores[best]<.20 and scores[runner]-scores[best]>.04:
+            info['source']='persistent_material_tracks'
+            return int(candidates[best]),info
+        return None,info
+
     def update_pins(self,f,X,views=None):
         pi=[];pt=[]
         if not hasattr(self,'grasp_seed'):self.grasp_seed={}
@@ -325,7 +358,7 @@ class CausalClothTracker:
                 if self.template=='shirt':
                     G=f['G_'+a];local_tips=(tips-G[:3,3])@G[:3,:3];distal=local_tips[:,2]>.12
                     if distal.any():tips=tips[distal]
-                d=cKDTree(tips).query(X)[0];raw_distance=d.copy();landmark_target=None
+                d=cKDTree(tips).query(X)[0];raw_distance=d.copy();landmark_target=None;contact_association=None
                 if getattr(self,'visible_grasp',False) and views is not None:
                     from .cloth_physics import visible_vertices
                     seen=np.zeros(len(X),bool)
@@ -343,6 +376,10 @@ class CausalClothTracker:
                     observed=np.concatenate([views[c]['P'] for c in CAMS[:2]])
                     observed_distance=cKDTree(tips).query(observed)[0]
                     nearest=int(observed_distance.argmin())
+                    if getattr(self,'track_grasp',False) and observed_distance[nearest]<.025:
+                        voted,contact_association=self.tracked_contact_landmark(views,observed[nearest],candidates)
+                        contact_association['applied']=bool(voted is not None and raw_distance[voted]<.060)
+                        if contact_association['applied']:corner=voted
                     if raw_distance[corner]<.060 and observed_distance[nearest]<.025:
                         i=corner;landmark_target=observed[nearest].copy()
                         d=raw_distance.copy();d[i]=observed_distance[nearest]
@@ -358,7 +395,7 @@ class CausalClothTracker:
                     G=f['G_'+a];target=X[idx].copy()
                     if landmark_target is not None:target+=landmark_target-X[i]
                     local=(target-G[:3,3])@G[:3,:3];self.pins[a]=(idx,local)
-                    self.events.append(dict(t=self.tick,arm=a,event='acquire',seed=i,boundary_prior=bool(self.boundary_grasp),landmark_contact=landmark_target is not None,vertices=idx.tolist(),distance_mm=float(d[i]*1000)))
+                    self.events.append(dict(t=self.tick,arm=a,event='acquire',seed=i,boundary_prior=bool(self.boundary_grasp),landmark_contact=landmark_target is not None,contact_association=contact_association,vertices=idx.tolist(),distance_mm=float(d[i]*1000)))
                 else:self.events.append(dict(t=self.tick,arm=a,event='miss',distance_mm=float(d[i]*1000)))
             if a in self.pins and self.template=='shirt' and getattr(self,'paired_grasp',False):
                 if not hasattr(self,'paired_done'):self.paired_done=set()
