@@ -136,6 +136,11 @@ class StreamConverter:
                     M=np.concatenate(measured) if measured else np.zeros((0,3))
                     target,colors=(M,np.full_like(M,.5)) if len(M)>=60 else (P[cand],C[cand])
                     source,source_colors=Pl,Cl
+                    if len(M)>=60:
+                        # Register the actual mesh being tracked, rather than the
+                        # older partial scan used to construct its colour model.
+                        source=o.icp_pts
+                        source_colors=np.full_like(source,.5)
                     if len(M)<60:
                         # A distinctive material (e.g. green bristles) localizes better
                         # than generic white plastic shared with the robot/table.
