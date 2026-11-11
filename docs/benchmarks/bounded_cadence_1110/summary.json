@@ -1,0 +1,365 @@
+{
+  "status": "ready for visual/depth/physical review; no selection or release yet",
+  "rates": {
+    "1": {
+      "cloth": {
+        "top": {
+          "mean_iou": 0.8461093655910613,
+          "median_iou": 0.8567680497522107,
+          "mean_coverage": 0.9028148577425544,
+          "depth_median_mm": 5.806684494018555,
+          "pass_iou_05": 1.0
+        },
+        "side": {
+          "mean_iou": 0.8498524585406834,
+          "median_iou": 0.8596814034380199,
+          "mean_coverage": 0.8856993613749026,
+          "depth_median_mm": 4.515111446380615,
+          "pass_iou_05": 1.0
+        }
+      },
+      "phases": {
+        "before_lift": {
+          "top": {
+            "iou": 0.8374846292213673,
+            "mask_recall": 0.9534196015003378,
+            "depth_med_mm": 6.2628092765808105,
+            "depth_p90_mm": 30.78067264556885
+          },
+          "side": {
+            "iou": 0.8896529894109703,
+            "mask_recall": 0.9181650405819427,
+            "depth_med_mm": 3.931894898414612,
+            "depth_p90_mm": 25.358438301086426
+          }
+        },
+        "first_fold": {
+          "top": {
+            "iou": 0.834892660502404,
+            "mask_recall": 0.8601676930617881,
+            "depth_med_mm": 4.590883731842041,
+            "depth_p90_mm": 37.46791572570801
+          },
+          "side": {
+            "iou": 0.8629597286326458,
+            "mask_recall": 0.8897104550789577,
+            "depth_med_mm": 4.1404664516448975,
+            "depth_p90_mm": 22.437488746643112
+          }
+        },
+        "between_folds": {
+          "top": {
+            "iou": 0.870565435067382,
+            "mask_recall": 0.8964281518035484,
+            "depth_med_mm": 3.672003746032715,
+            "depth_p90_mm": 25.990876197814924
+          },
+          "side": {
+            "iou": 0.8377523964919437,
+            "mask_recall": 0.8596707968460449,
+            "depth_med_mm": 5.668282508850098,
+            "depth_p90_mm": 40.99371910095215
+          }
+        },
+        "second_fold": {
+          "top": {
+            "iou": 0.8347655433252819,
+            "mask_recall": 0.8831995015581413,
+            "depth_med_mm": 5.9658362865448,
+            "depth_p90_mm": 36.800058746337896
+          },
+          "side": {
+            "iou": 0.8189451941924228,
+            "mask_recall": 0.8656787147746854,
+            "depth_med_mm": 4.443056583404541,
+            "depth_p90_mm": 18.70677423477173
+          }
+        }
+      },
+      "macro_common_iou": 0.8230533078903647,
+      "max_extension": 0.01900000111852096,
+      "max_compression": 0.01805773347892392,
+      "endpoint_crossing_frames": 0,
+      "valid_frame_fraction": 1.0,
+      "approximate_frame_fraction": 1.0,
+      "sam_fraction": 1.0,
+      "sam_frames": 453,
+      "seconds": 6699.430198370945,
+      "concurrent_job_fps": 0.06761769084632795,
+      "implementation_sha256": "dcc3fb81493b3d717106a350e0fe77b6a6bbf7202a6a2aa0a568ec4fae7ee90c",
+      "config_sha256": "310bc8310513d1bba32c1eddd207ebc6ae8af5d460e44e2f48396ee354ad471a"
+    },
+    "3": {
+      "cloth": {
+        "top": {
+          "mean_iou": 0.8458643740928485,
+          "median_iou": 0.8514519251451925,
+          "mean_coverage": 0.9074861768381941,
+          "depth_median_mm": 5.439937114715576,
+          "pass_iou_05": 1.0
+        },
+        "side": {
+          "mean_iou": 0.8470361177975186,
+          "median_iou": 0.8624803227075954,
+          "mean_coverage": 0.898909870669637,
+          "depth_median_mm": 4.05403995513916,
+          "pass_iou_05": 1.0
+        }
+      },
+      "phases": {
+        "before_lift": {
+          "top": {
+            "iou": 0.8411965363859901,
+            "mask_recall": 0.9497107562826701,
+            "depth_med_mm": 5.8252363204956055,
+            "depth_p90_mm": 27.561944866180422
+          },
+          "side": {
+            "iou": 0.8937754198800479,
+            "mask_recall": 0.9242002694135423,
+            "depth_med_mm": 3.774389624595642,
+            "depth_p90_mm": 23.509913444519043
+          }
+        },
+        "first_fold": {
+          "top": {
+            "iou": 0.8351653428290651,
+            "mask_recall": 0.8655697016557181,
+            "depth_med_mm": 5.631506443023682,
+            "depth_p90_mm": 33.9387285232544
+          },
+          "side": {
+            "iou": 0.8569672352163233,
+            "mask_recall": 0.8966373390154578,
+            "depth_med_mm": 4.237577199935913,
+            "depth_p90_mm": 22.265068054199233
+          }
+        },
+        "between_folds": {
+          "top": {
+            "iou": 0.8658556565904809,
+            "mask_recall": 0.8909354867979312,
+            "depth_med_mm": 4.584282875061035,
+            "depth_p90_mm": 19.85028381347656
+          },
+          "side": {
+            "iou": 0.8550470658922491,
+            "mask_recall": 0.8924821610601427,
+            "depth_med_mm": 7.291972637176514,
+            "depth_p90_mm": 50.29726104736328
+          }
+        },
+        "second_fold": {
+          "top": {
+            "iou": 0.8348904256837801,
+            "mask_recall": 0.9060361615240162,
+            "depth_med_mm": 5.221262454986572,
+            "depth_p90_mm": 23.871221923828124
+          },
+          "side": {
+            "iou": 0.8103202569389173,
+            "mask_recall": 0.8901725768533391,
+            "depth_med_mm": 4.002436876296997,
+            "depth_p90_mm": 14.551978874206544
+          }
+        }
+      },
+      "macro_common_iou": 0.8123509391822886,
+      "max_extension": 0.01900000254685197,
+      "max_compression": 0.018326942703737137,
+      "endpoint_crossing_frames": 0,
+      "valid_frame_fraction": 1.0,
+      "approximate_frame_fraction": 1.0,
+      "sam_fraction": 0.3333333333333333,
+      "sam_frames": 151,
+      "seconds": 5813.095461355057,
+      "concurrent_job_fps": 0.07792750059095087,
+      "implementation_sha256": "dcc3fb81493b3d717106a350e0fe77b6a6bbf7202a6a2aa0a568ec4fae7ee90c",
+      "config_sha256": "62332487cc2f71789a435f18e4e64ce2bf7285cc32e020d60a13bb2a4e1cb612"
+    },
+    "2": {
+      "cloth": {
+        "top": {
+          "mean_iou": 0.8402726943963962,
+          "median_iou": 0.8473818646232439,
+          "mean_coverage": 0.900074637023234,
+          "depth_median_mm": 5.824148654937744,
+          "pass_iou_05": 1.0
+        },
+        "side": {
+          "mean_iou": 0.8372289518130499,
+          "median_iou": 0.8673401666543765,
+          "mean_coverage": 0.8813639014105966,
+          "depth_median_mm": 5.06138801574707,
+          "pass_iou_05": 1.0
+        }
+      },
+      "phases": {
+        "before_lift": {
+          "top": {
+            "iou": 0.8402078242420555,
+            "mask_recall": 0.9498236780219813,
+            "depth_med_mm": 6.15304708480835,
+            "depth_p90_mm": 28.814345359802246
+          },
+          "side": {
+            "iou": 0.8903284779458323,
+            "mask_recall": 0.9187981459709741,
+            "depth_med_mm": 3.865450620651245,
+            "depth_p90_mm": 24.244288063049318
+          }
+        },
+        "first_fold": {
+          "top": {
+            "iou": 0.8281719580401006,
+            "mask_recall": 0.8536854183098468,
+            "depth_med_mm": 4.955530166625977,
+            "depth_p90_mm": 38.05801658630372
+          },
+          "side": {
+            "iou": 0.8603560515701626,
+            "mask_recall": 0.8979244415273899,
+            "depth_med_mm": 4.058554649353027,
+            "depth_p90_mm": 22.787261390686044
+          }
+        },
+        "between_folds": {
+          "top": {
+            "iou": 0.8636669261801968,
+            "mask_recall": 0.8832360752289932,
+            "depth_med_mm": 4.216134548187256,
+            "depth_p90_mm": 26.6787410736084
+          },
+          "side": {
+            "iou": 0.8476561498833841,
+            "mask_recall": 0.8994027195323421,
+            "depth_med_mm": 6.728053092956543,
+            "depth_p90_mm": 45.327962112426775
+          }
+        },
+        "second_fold": {
+          "top": {
+            "iou": 0.8199342503627641,
+            "mask_recall": 0.8910887040418503,
+            "depth_med_mm": 6.140634536743164,
+            "depth_p90_mm": 38.12179794311523
+          },
+          "side": {
+            "iou": 0.7472801048849587,
+            "mask_recall": 0.8031090847454856,
+            "depth_med_mm": 5.346089601516724,
+            "depth_p90_mm": 28.066173267364515
+          }
+        }
+      },
+      "macro_common_iou": 0.8071509302743625,
+      "max_extension": 0.01900000192511553,
+      "max_compression": 0.018101197209569042,
+      "endpoint_crossing_frames": 0,
+      "valid_frame_fraction": 1.0,
+      "approximate_frame_fraction": 1.0,
+      "sam_fraction": 0.5011037527593819,
+      "sam_frames": 227,
+      "seconds": 6942.74497736292,
+      "concurrent_job_fps": 0.06524796769534578,
+      "implementation_sha256": "dcc3fb81493b3d717106a350e0fe77b6a6bbf7202a6a2aa0a568ec4fae7ee90c",
+      "config_sha256": "5e714ffe36028d1df1d02708c43881b70560217b2866f6b5d5c0070930c540d6"
+    },
+    "10": {
+      "cloth": {
+        "top": {
+          "mean_iou": 0.8180653807421177,
+          "median_iou": 0.8188420834197966,
+          "mean_coverage": 0.8847809256140797,
+          "depth_median_mm": 5.739867687225342,
+          "pass_iou_05": 1.0
+        },
+        "side": {
+          "mean_iou": 0.808511792347113,
+          "median_iou": 0.8354702323662863,
+          "mean_coverage": 0.8679786891266102,
+          "depth_median_mm": 3.6178231239318848,
+          "pass_iou_05": 1.0
+        }
+      },
+      "phases": {
+        "before_lift": {
+          "top": {
+            "iou": 0.8342085234032651,
+            "mask_recall": 0.9463269450026865,
+            "depth_med_mm": 5.417972803115845,
+            "depth_p90_mm": 26.332405471801756
+          },
+          "side": {
+            "iou": 0.8956272908278311,
+            "mask_recall": 0.9324814472129201,
+            "depth_med_mm": 3.197781801223755,
+            "depth_p90_mm": 20.913779830932626
+          }
+        },
+        "first_fold": {
+          "top": {
+            "iou": 0.8173911725856647,
+            "mask_recall": 0.8413591742018953,
+            "depth_med_mm": 6.06413197517395,
+            "depth_p90_mm": 48.12236442565919
+          },
+          "side": {
+            "iou": 0.8486083469034225,
+            "mask_recall": 0.8913933499297177,
+            "depth_med_mm": 4.095368146896362,
+            "depth_p90_mm": 23.155820465087892
+          }
+        },
+        "between_folds": {
+          "top": {
+            "iou": 0.8069339870425495,
+            "mask_recall": 0.8282218597063622,
+            "depth_med_mm": 5.832940101623535,
+            "depth_p90_mm": 40.09834289550782
+          },
+          "side": {
+            "iou": 0.791450043119379,
+            "mask_recall": 0.825488443366109,
+            "depth_med_mm": 6.423890590667725,
+            "depth_p90_mm": 47.18171501159669
+          }
+        },
+        "second_fold": {
+          "top": {
+            "iou": 0.8071457759131626,
+            "mask_recall": 0.9006116681007114,
+            "depth_med_mm": 8.036874294281006,
+            "depth_p90_mm": 56.52384014129639
+          },
+          "side": {
+            "iou": 0.7160568209122076,
+            "mask_recall": 0.8070999836682652,
+            "depth_med_mm": 3.943122982978821,
+            "depth_p90_mm": 23.559865665435797
+          }
+        }
+      },
+      "macro_common_iou": 0.8032157586418176,
+      "max_extension": 0.01900000178536909,
+      "max_compression": 0.01809900059396441,
+      "endpoint_crossing_frames": 0,
+      "valid_frame_fraction": 1.0,
+      "approximate_frame_fraction": 1.0,
+      "sam_fraction": 0.10154525386313466,
+      "sam_frames": 46,
+      "seconds": 7711.26966530201,
+      "concurrent_job_fps": 0.05874518978869848,
+      "implementation_sha256": "dcc3fb81493b3d717106a350e0fe77b6a6bbf7202a6a2aa0a568ec4fae7ee90c",
+      "config_sha256": "08fdab68d31c7409c55493af820e330de9b2865fc5294c5fb7b7ed52243b7476"
+    }
+  },
+  "accuracy_ranking": [
+    1,
+    3,
+    2,
+    10
+  ],
+  "rigid_reference": "/home/howardji/point_tracker/reports/SAM_ACCURACY_1110/summary.json",
+  "note": "Rigid pipeline unchanged, reuse its full cadence benchmark; cloth freshly rerun through shared step. Equal object/camera means; box excluded (no independent mask). Fixed cloth masks/depth are consistency proxies. Cloth timings are overlapping-job measurements, not isolated speed comparisons."
+}

@@ -1,0 +1,298 @@
+{
+  "matched_frames": 453,
+  "models": {
+    "selected138": {
+      "before_lift": {
+        "frames": 160,
+        "held_frames": 22,
+        "hard_grasp_error_mm": {
+          "maximum": 2.7020377173861898e-12,
+          "median": 5.086400954297791e-13
+        },
+        "grasp_error_mm": {
+          "maximum": 8.614273305861223,
+          "median": 8.025054793824854
+        },
+        "heldout_tracks": {
+          "top": {
+            "evaluated_frames": 130,
+            "median_of_frame_medians_px": 2.698817491764628,
+            "median_track_count": 37.0
+          },
+          "side": {
+            "evaluated_frames": 130,
+            "median_of_frame_medians_px": 3.88261444776124,
+            "median_track_count": 69.0
+          }
+        },
+        "cotracker": {
+          "top": {
+            "evaluated_frames": 160,
+            "median_of_frame_medians_px": 1.0015866724963178,
+            "median_track_count": 28.0
+          },
+          "side": {
+            "evaluated_frames": 160,
+            "median_of_frame_medians_px": 1.6747065030063368,
+            "median_track_count": 37.0
+          }
+        }
+      },
+      "first_fold": {
+        "frames": 90,
+        "held_frames": 74,
+        "hard_grasp_error_mm": {
+          "maximum": 1.946851337558695e-12,
+          "median": 6.206335383118183e-14
+        },
+        "grasp_error_mm": {
+          "maximum": 25.056840607217094,
+          "median": 17.63517044719266
+        },
+        "heldout_tracks": {
+          "top": {
+            "evaluated_frames": 57,
+            "median_of_frame_medians_px": 9.832270163358956,
+            "median_track_count": 10.0
+          },
+          "side": {
+            "evaluated_frames": 90,
+            "median_of_frame_medians_px": 12.118480992822029,
+            "median_track_count": 29.0
+          }
+        },
+        "cotracker": {
+          "top": {
+            "evaluated_frames": 50,
+            "median_of_frame_medians_px": 10.12204772811878,
+            "median_track_count": 11.0
+          },
+          "side": {
+            "evaluated_frames": 90,
+            "median_of_frame_medians_px": 10.463759015167739,
+            "median_track_count": 26.5
+          }
+        }
+      },
+      "between_folds": {
+        "frames": 85,
+        "held_frames": 13,
+        "hard_grasp_error_mm": {
+          "maximum": 2.2247786310271854e-13,
+          "median": 0.0
+        },
+        "grasp_error_mm": {
+          "maximum": 2.532475205710798,
+          "median": 0.916859488817542
+        },
+        "heldout_tracks": {
+          "top": {
+            "evaluated_frames": 85,
+            "median_of_frame_medians_px": 6.5719667708993725,
+            "median_track_count": 51.0
+          },
+          "side": {
+            "evaluated_frames": 85,
+            "median_of_frame_medians_px": 9.029649755775983,
+            "median_track_count": 30.0
+          }
+        },
+        "cotracker": {
+          "top": {
+            "evaluated_frames": 79,
+            "median_of_frame_medians_px": 1.7678357891625605,
+            "median_track_count": 38.0
+          },
+          "side": {
+            "evaluated_frames": 85,
+            "median_of_frame_medians_px": 1.738228662636612,
+            "median_track_count": 27.0
+          }
+        }
+      },
+      "second_fold": {
+        "frames": 118,
+        "held_frames": 36,
+        "hard_grasp_error_mm": {
+          "maximum": 4.11007502707789e-12,
+          "median": 7.850462293418876e-14
+        },
+        "grasp_error_mm": {
+          "maximum": 25.98330568725833,
+          "median": 2.010266354431786
+        },
+        "heldout_tracks": {
+          "top": {
+            "evaluated_frames": 58,
+            "median_of_frame_medians_px": 5.399732472127453,
+            "median_track_count": 15.0
+          },
+          "side": {
+            "evaluated_frames": 63,
+            "median_of_frame_medians_px": 8.743038303793979,
+            "median_track_count": 19.0
+          }
+        },
+        "cotracker": {
+          "top": {
+            "evaluated_frames": 118,
+            "median_of_frame_medians_px": 3.851178037074386,
+            "median_track_count": 29.0
+          },
+          "side": {
+            "evaluated_frames": 101,
+            "median_of_frame_medians_px": 4.818238980716939,
+            "median_track_count": 29.0
+          }
+        }
+      }
+    },
+    "previous_n1": {
+      "before_lift": {
+        "frames": 160,
+        "held_frames": 22,
+        "hard_grasp_error_mm": {
+          "maximum": 0.0063820122836938725,
+          "median": 0.0
+        },
+        "grasp_error_mm": {
+          "maximum": 11.769550852331685,
+          "median": 8.529412883235977
+        },
+        "heldout_tracks": {
+          "top": {
+            "evaluated_frames": 130,
+            "median_of_frame_medians_px": 0.5317530581492023,
+            "median_track_count": 51.5
+          },
+          "side": {
+            "evaluated_frames": 130,
+            "median_of_frame_medians_px": 0.5375240558831018,
+            "median_track_count": 81.0
+          }
+        },
+        "cotracker": {
+          "top": {
+            "evaluated_frames": 160,
+            "median_of_frame_medians_px": 0.3455803802358557,
+            "median_track_count": 39.0
+          },
+          "side": {
+            "evaluated_frames": 160,
+            "median_of_frame_medians_px": 0.3644193257011724,
+            "median_track_count": 42.0
+          }
+        }
+      },
+      "first_fold": {
+        "frames": 90,
+        "held_frames": 74,
+        "hard_grasp_error_mm": {
+          "maximum": 0.51986722863223,
+          "median": 1.7474809014723664e-06
+        },
+        "grasp_error_mm": {
+          "maximum": 24.840630074926597,
+          "median": 20.629146171662335
+        },
+        "heldout_tracks": {
+          "top": {
+            "evaluated_frames": 65,
+            "median_of_frame_medians_px": 6.758263926824039,
+            "median_track_count": 6.0
+          },
+          "side": {
+            "evaluated_frames": 90,
+            "median_of_frame_medians_px": 10.131186229610435,
+            "median_track_count": 29.0
+          }
+        },
+        "cotracker": {
+          "top": {
+            "evaluated_frames": 50,
+            "median_of_frame_medians_px": 9.783616355358603,
+            "median_track_count": 16.0
+          },
+          "side": {
+            "evaluated_frames": 90,
+            "median_of_frame_medians_px": 9.233983766218945,
+            "median_track_count": 30.5
+          }
+        }
+      },
+      "between_folds": {
+        "frames": 85,
+        "held_frames": 13,
+        "hard_grasp_error_mm": {
+          "maximum": 0.155504387852365,
+          "median": 0.0
+        },
+        "grasp_error_mm": {
+          "maximum": 3.770270088746258,
+          "median": 3.4675166148672347
+        },
+        "heldout_tracks": {
+          "top": {
+            "evaluated_frames": 76,
+            "median_of_frame_medians_px": 3.3961889373324063,
+            "median_track_count": 54.0
+          },
+          "side": {
+            "evaluated_frames": 85,
+            "median_of_frame_medians_px": 4.919954328291416,
+            "median_track_count": 22.0
+          }
+        },
+        "cotracker": {
+          "top": {
+            "evaluated_frames": 79,
+            "median_of_frame_medians_px": 0.4743487961697216,
+            "median_track_count": 29.0
+          },
+          "side": {
+            "evaluated_frames": 85,
+            "median_of_frame_medians_px": 1.203350007001375,
+            "median_track_count": 27.0
+          }
+        }
+      },
+      "second_fold": {
+        "frames": 118,
+        "held_frames": 36,
+        "hard_grasp_error_mm": {
+          "maximum": 0.625205600272611,
+          "median": 0.0
+        },
+        "grasp_error_mm": {
+          "maximum": 33.92468641780321,
+          "median": 21.01450945569405
+        },
+        "heldout_tracks": {
+          "top": {
+            "evaluated_frames": 57,
+            "median_of_frame_medians_px": 6.996417041546518,
+            "median_track_count": 10.0
+          },
+          "side": {
+            "evaluated_frames": 61,
+            "median_of_frame_medians_px": 12.48917362860603,
+            "median_track_count": 9.0
+          }
+        },
+        "cotracker": {
+          "top": {
+            "evaluated_frames": 118,
+            "median_of_frame_medians_px": 0.5086805394909013,
+            "median_track_count": 25.0
+          },
+          "side": {
+            "evaluated_frames": 102,
+            "median_of_frame_medians_px": 0.40905333752797046,
+            "median_track_count": 19.0
+          }
+        }
+      }
+    }
+  },
+  "note": "These 2D track constraints are excluded from temporal fitting; camera depth still contributes to surface fitting. LK long tracks have age >=30; frames require >=5 tracks. Feature populations can differ across fits, so these are diagnostics, not matched ground-truth material trajectories. Grasp statistics use held frames only; hard centres and the assumed soft neighbourhood are separate errors. Depth/silhouette audits include all frames independently."
+}

@@ -1,0 +1,18 @@
+{
+  "task": "hang",
+  "frames": 32,
+  "maximum_point_difference_m": 5.960464477539063e-08,
+  "recorded_joint_and_video_access_blocked": true,
+  "config_sha256": "39540e7c9e55a6d7fba41a5e06155edce481660ecca6d7c46b4e95b931552ca5",
+  "sam_frames": 32,
+  "exact_saved_masks": true,
+  "cloth_quality_flags_checked": false,
+  "recorded_low_dim_access_blocked_during_step": true,
+  "recorded_frame_and_camera_pose_access_blocked": true,
+  "live_constructor_uses_setup_only": true,
+  "live_setup_files": [
+    "calib.json",
+    "meta.json",
+    "table_region.json"
+  ]
+}

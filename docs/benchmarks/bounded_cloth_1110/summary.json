@@ -1,0 +1,151 @@
+{
+  "selected": "candidate138 (candidate136 plus adaptive current-frame contact refinement)",
+  "cadence": 1,
+  "frames": 453,
+  "camera_summary": {
+    "candidate138": {
+      "before_lift": {
+        "top": {
+          "iou": 0.8374846292213673,
+          "mask_recall": 0.9534196015003378,
+          "depth_med_mm": 6.2628092765808105,
+          "depth_p90_mm": 30.78067264556885
+        },
+        "side": {
+          "iou": 0.8896529894109703,
+          "mask_recall": 0.9181650405819427,
+          "depth_med_mm": 3.931894898414612,
+          "depth_p90_mm": 25.358438301086426
+        }
+      },
+      "first_fold": {
+        "top": {
+          "iou": 0.834892660502404,
+          "mask_recall": 0.8601676930617881,
+          "depth_med_mm": 4.590883731842041,
+          "depth_p90_mm": 37.46791572570801
+        },
+        "side": {
+          "iou": 0.8629597286326458,
+          "mask_recall": 0.8897104550789577,
+          "depth_med_mm": 4.1404664516448975,
+          "depth_p90_mm": 22.437488746643112
+        }
+      },
+      "between_folds": {
+        "top": {
+          "iou": 0.870565435067382,
+          "mask_recall": 0.8964281518035484,
+          "depth_med_mm": 3.672003746032715,
+          "depth_p90_mm": 25.990876197814924
+        },
+        "side": {
+          "iou": 0.8377523964919437,
+          "mask_recall": 0.8596707968460449,
+          "depth_med_mm": 5.668282508850098,
+          "depth_p90_mm": 40.99371910095215
+        }
+      },
+      "second_fold": {
+        "top": {
+          "iou": 0.8321232226673805,
+          "mask_recall": 0.8690502731160368,
+          "depth_med_mm": 5.891911506652832,
+          "depth_p90_mm": 39.035112380981445
+        },
+        "side": {
+          "iou": 0.8070377268770458,
+          "mask_recall": 0.8701756702029103,
+          "depth_med_mm": 4.102110862731934,
+          "depth_p90_mm": 20.165562057495123
+        }
+      }
+    },
+    "previous_n1": {
+      "before_lift": {
+        "top": {
+          "iou": 0.8664528927113806,
+          "mask_recall": 0.9630085755205703,
+          "depth_med_mm": 1.9324719905853271,
+          "depth_p90_mm": 8.03238115310669
+        },
+        "side": {
+          "iou": 0.8934541738865432,
+          "mask_recall": 0.9200783744757265,
+          "depth_med_mm": 2.1843239068984985,
+          "depth_p90_mm": 14.711888265609744
+        }
+      },
+      "first_fold": {
+        "top": {
+          "iou": 0.7733845621663348,
+          "mask_recall": 0.7830959319690156,
+          "depth_med_mm": 8.0370454788208,
+          "depth_p90_mm": 30.85560760498047
+        },
+        "side": {
+          "iou": 0.8470312543773657,
+          "mask_recall": 0.8789186898100352,
+          "depth_med_mm": 10.716713905334473,
+          "depth_p90_mm": 44.29646911621094
+        }
+      },
+      "between_folds": {
+        "top": {
+          "iou": 0.6871668206695571,
+          "mask_recall": 0.694676514509424,
+          "depth_med_mm": 5.806088447570801,
+          "depth_p90_mm": 17.88653221130371
+        },
+        "side": {
+          "iou": 0.830903570622036,
+          "mask_recall": 0.848743987172635,
+          "depth_med_mm": 10.2766752243042,
+          "depth_p90_mm": 42.856544494628906
+        }
+      },
+      "second_fold": {
+        "top": {
+          "iou": 0.7151566945166148,
+          "mask_recall": 0.7745030666218476,
+          "depth_med_mm": 7.018476963043213,
+          "depth_p90_mm": 24.206506729125984
+        },
+        "side": {
+          "iou": 0.6340198818736291,
+          "mask_recall": 0.650274673782316,
+          "depth_med_mm": 8.008368492126465,
+          "depth_p90_mm": 23.307276725769043
+        }
+      }
+    }
+  },
+  "physical": {
+    "max_extension": 0.01900000072249397,
+    "max_compression": 0.018016734175047566,
+    "crossing_frames": 0,
+    "max_hard_grasp_mm": 4.11007502707789e-12,
+    "max_soft_patch_mm": 25.98330568725833,
+    "extra_iterations": 9
+  },
+  "validation": "Fresh full unified candidate136; candidate138 verified causal checkpoint continuation from347, common current packets; fresh32frame candidate138 conversion and setup-only live replay. Final dataset conversion starts every episode at0.",
+  "geometry": "Fixed offline single-sheet rest asset; all geometry approximate, hidden layers not measured.",
+  "live_parity": {
+    "task": "greycloth",
+    "frames": 32,
+    "maximum_point_difference_m": 5.960464477539063e-08,
+    "recorded_joint_and_video_access_blocked": true,
+    "config_sha256": "d088e01a20eb325320e906f8a2e25d9bbd5e50e4d88edfaa28d7af6c115ceceb",
+    "sam_frames": 32,
+    "exact_saved_masks": true,
+    "cloth_quality_flags_checked": true,
+    "recorded_low_dim_access_blocked_during_step": true,
+    "recorded_frame_and_camera_pose_access_blocked": true,
+    "live_constructor_uses_setup_only": true,
+    "live_setup_files": [
+      "calib.json",
+      "meta.json",
+      "table_region.json"
+    ]
+  }
+}

@@ -102,7 +102,7 @@ def main():
     from realpc.v4 import SCHEMA
     schema = dict(SCHEMA)
     schema.update(cloth_points='[Nc,T,3] float32, causal deformable clean shirt template',
-                  cloth_valid='[T] bool; shared current-frame finite/strain/crossing/two-view support gate',
+                  cloth_valid='[T] bool; shared current-frame finite/strain/crossing/contact/two-view support gate',
                   cloth_approximate='[T] bool; true for every estimated template frame, including initialization',
                   cloth_fold_approximate='[T] bool; legacy alias of cloth_approximate',
                   cloth_geometry_observed_only='false; hidden material is inferred, not directly measured',

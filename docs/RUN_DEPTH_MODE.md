@@ -9,13 +9,13 @@ python scripts/convert_scene.py --episodes /path/to/task/episode_0000 \
   --out /path/to/dataset_v2 --config configs/scene_pipeline_v2.json --save-masks
 ```
 
-Use `--stop 12` for a quick prefix and `--skip-existing` for an exact-config/code resume. Do not precompute SAM masks or pass cached cloth tracks to this command. The same current packets generate the scene masks and point tracks inside the shared pipeline.
+Use `--stop 32` for a quick prefix and `--skip-existing` for an exact-config/code resume. Do not precompute SAM masks or pass cached cloth tracks to this command. The same current packets generate the scene masks and point tracks inside the shared pipeline.
 
 For a live/replay check:
 
 ```bash
 python tests/check_scene_live_parity.py \
-  --converted /path/to/dataset_v2/task/episode_0000.npz --out parity.json
+  --converted /path/to/dataset_v2/task/episode_0000.npz --frames 32 --out parity.json
 ```
 
 The test blocks video/joint recording access inside the live step, compares decoded points and saved masks, and records the actual SAM frame count. Legacy `convert_v4.py --depth-mesh` and cadence scripts remain research ablations only.

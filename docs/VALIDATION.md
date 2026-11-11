@@ -1,32 +1,42 @@
-# Shared scene pipeline validation — 2026-11-10
+# Unified pipeline validation — 2026-11-10
 
-This page records the completed cadence benchmark with the previous cloth tracker. Candidate 136 adds a fixed offline shirt asset, bounded deformation and material-aware grasp association; its full fold and cadence checks are still running. Do not attribute the historical cloth scores below to that candidate. Current code uses shared current-frame cloth quality flags ([definition](CLOTH_QUALITY_FLAGS.md)); the historical benchmark used a conservative frame-based exclusion. Master and the previous tag have not been replaced by the experimental candidate.
+The selected shared configuration is `configs/scene_pipeline_v2.json`: SAM every processed frame, rigid depth/mesh tracking, FK robot points, and a bounded single-sheet cloth tracker. Live inference and conversion call the same `ScenePipeline.step`.
 
-The selected shared SAM interval is **1 processed frame**, for every object and both live inference and conversion. It has the highest equal-object mean silhouette overlap over the tested full episodes. N3 is better for cloth alone, and N10 is better for broom top-view overlap. Speed received no selection reward. See [all rate tables and references](benchmarks/sam_cadence_1110/README.md) and [decision and regressions](benchmarks/sam_cadence_1110/DECISION.md).
+## SAM cadence
 
-| SAM interval | Mean object/camera IoU | Hang fps | Sweep fps | Cloth fps |
+The completed fixed-tracker N1/N2/N3/N10 benchmark selects N1 by accuracy, with equal-object/camera mean IoU .8231/.8072/.8124/.8032. N1 also wins using only independent rigid references or including the box proxy. The [per-object tables, SAM call fractions, speed and caveats](benchmarks/bounded_cadence_1110/README.md) retain all rates. The subsequent contact refinement is a separate N1 validation.
+
+## Shirt alignment and physics
+
+| Phase | Previous N1 depth top/side mm | Selected depth top/side mm | Previous IoU | Selected IoU |
 |---|---:|---:|---:|---:|
-| 1 (selected) | .8143 | 1.251 | .866 | .564 |
-| 2 | .7811 | 1.968 | 1.369 | .483 |
-| 3 | .8054 | 2.490 | 1.689 | .595 |
-| 10 | .7834 | 3.977 | 2.490 | .534 |
+| before lift | 1.93/2.18 | 6.26/3.93 | 0.866/0.893 | 0.837/0.890 |
+| first fold | 8.04/10.72 | 4.59/4.14 | 0.773/0.847 | 0.835/0.863 |
+| second fold | 7.02/8.01 | 5.89/4.10 | 0.715/0.634 | 0.832/0.807 |
 
-One full validation episode per task: hang 499, sweep 849, cloth 453 frames. These measurements do not establish dataset-wide performance. The box has no independent mask and is excluded from the macro score; raw-depth and fixed-reference consistency remain reported. The selected run invokes SAM on all frames. FPS is complete conversion walltime on the local RTX4070TiSUPER, not video playback speed; no real-time 30 Hz claim is made.
+Depth entries are medians of per-frame visible-overlap medians against common masks/depth. Initial/pre-lift depth and some upper tails regress. Silhouette/depth consistency does not measure hidden material identity. Held-out long LK-track errors during the first fold are 9.8/12.1 px versus 6.8/10.1 px previously (top/side), so the surface-fit gains do not establish improved material tracking. Feature populations differ; [full track diagnostics](benchmarks/bounded_cloth_1110/tracking_errors.json) report counts and all phases.
 
-## Causality and shared implementation
+All 453 exported meshes pass the independent triangle-crossing check. Maximum extension/compression is 1.90%/1.80%; contact-centre residual is below 1e-6 mm in this trajectory. A bounded extra solve on a lagging held contact uses nine additional iterations in total, fixing the earlier 36.6 mm exception. Relative to the unrefined bounded tracker, second-fold IoU changes .835/.819 to .832/.807 and median depth changes 5.97/4.44 to 5.89/4.10 mm. This is a contact-reliability improvement with a small overlap cost, not a win on every metric. The surrounding soft grasp patch can still deviate; it is reported separately from the constrained centres.
 
-One config: configs/scene_pipeline_v2.json. ScenePipeline.step(t, frames, q) uses supplied current RGB-D and calibrated joints plus previous state. There is one segmentation stream and one forward SAM memory per camera. Rigid meshes, cloth deformation and robot FK consume this stream. Conversion saves the same outputs as live inference. Calibration and asset construction are offline; evaluation masks never enter runtime.
+The shirt is a single-sheet surface approximation. Its fixed rest asset uses all-frame/two-view offline evidence; frame 0 registration and subsequent tracking use only current/past packets. Sleeves, wrinkles, occluded material and fold-edge placement remain imperfect. All cloth is marked approximate. The [quality policy](CLOTH_QUALITY_FLAGS.md) uses current support, physical checks and a 5 mm held-contact gate, never a frame-number cutoff.
 
-The four cadence configurations differ only in interval; implementation/assets hashes and reference-visible evaluation cohorts match. Robot transforms, joints and static points are identical across rates. All converted files passed realpc.dataset.load. Actual live/replay verification results are recorded with this benchmark.
+## Scope of verification
 
-## Remaining errors
+Candidate136 ran fresh through the entire unified pipeline at each cadence. The adaptive candidate138 was tested as a causal continuation from the verified frame 347 checkpoint; its unchanged prefix is reused. The restored unchanged next step differed from the original by only 5.9 micrometres. No future pose or frame is used. At N1, the segmentation stream refreshes every frame and after_tracking returns without cloth-fit feedback, so these current packets remain applicable to this tracker-only change. This is not described as a new full frame-zero run. The final dataset conversion starts each episode fresh at 0 and will be audited again.
 
-N1 has a release-time broom error around frames 587–599 and a dustpan pose error at 750. Some depth metrics regress despite improved average silhouette overlap. The full tables and contact sheets retain these cases; a single cadence does not dominate every metric.
+Fresh 32-frame candidate138 conversion and live replay pass, including online tracker memory commits. Live construction uses only meta.json, calib.json and table_region.json; recording/video/joint reads are blocked inside step. Masks and quality flags match exactly; maximum point difference is 5.96e-8 m. Hang and sweep also pass 32-frame checks. One initial hang repeat differed by 0.18 mm at frame 2, while fresh conversion and subsequent repeat matched; that unexplained numerical variation remains recorded. These checks do not prove bitwise reproducibility for every native path.
 
-The cloth second fold improves substantially versus N10: median visible depth 19.09/29.10→7.02/8.01mm, maximum grasp error 276.7→33.9mm. N3 is better on visible fold alignment but not the overall object score. None of these runs is a physically valid cloth reconstruction: N1 maximum local extension is 168.5%, and tracker intersection flags do not verify hidden layers or finite-thickness collisions. Fold frames remain approximate and excluded from the conservative cloth_valid gate. That saved gate is a dataset QA annotation, not a decision supplied to live tracking.
+## Speed and remaining rigid errors
 
-Artifacts: /home/howardji/point_tracker/reports/SAM_ACCURACY_1110/. Historical N10 measurements are retained in [the previous validation](VALIDATION_N10_1110.md). The bulk 52-episode conversion and encoder audit remain cancelled;27 finished episodes and logs are preserved unchanged.
+The isolated rigid N1 benchmark measures 0.866 fps sweep and 1.251 fps hang. The fresh bounded N1 cloth reference takes 6,699 s / 0.0676 fps while cadence jobs overlap; the adaptive continuation is not an isolated full-pipeline speed measurement. SAM runs on 100% of frames, with one scene refresh per camera. Causality does not imply real-time throughput.
 
-## Verification of the selected setting
+Known rigid weaknesses include a release-time broom error near 587–599 and dustpan pose error at750 in the sampled sweep episode. The box lacks independent masks. Full-dataset QA must report missing poses, raw-depth agreement and stream consistency separately from independent mask scores.
 
-Four pipeline tests pass with episode data supplied (no skips). Actual 12-frame live/replay checks pass for hang, sweep and cloth with recorded video/joint reads blocked inside the live step. Saved masks match exactly and maximum point difference is 5.96e-8m. Each prefix uses 12 SAM refreshes. All 12 benchmark outputs passed load verification. See [verification records](benchmarks/sam_cadence_1110/verification.json).
+## Artifacts
+
+- [Selected shirt contact sheet](benchmarks/bounded_cloth_1110/contact_sheet.jpg) and [machine-readable summary](benchmarks/bounded_cloth_1110/summary.json).
+- Full shirt video, per-frame metrics and plots: `/home/howardji/point_tracker/reports/ASTRA_Q30_1110/shirt138/`.
+- Sweep/hang videos: `/home/howardji/point_tracker/reports/SAM_ACCURACY_1110/sweep_n1/` and `hang_n1/`.
+- Earlier evidence: [historical pre-bounded validation](VALIDATION_PRE_BOUNDED_1110.md).
+
+The release is local only. The 52-episode conversion follows the finalized code, parity checks and delivery of these videos; existing partial data are preserved.

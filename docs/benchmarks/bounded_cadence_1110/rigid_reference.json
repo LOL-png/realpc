@@ -1,0 +1,1092 @@
+{
+  "rates": {
+    "1": {
+      "tasks": {
+        "hang": {
+          "frames": 499,
+          "seconds": 398.827356612077,
+          "end_to_end_fps": 1.2511679345139728,
+          "step_fps": 1.2659172757075783,
+          "sam_frames": 499,
+          "sam_fraction": 1.0,
+          "config_sha256": "39540e7c9e55a6d7fba41a5e06155edce481660ecca6d7c46b4e95b931552ca5",
+          "implementation_sha256": "25679bdac8c5056817dd42a2fe12b2833203775a0443783a7642a4fc391628c2",
+          "load_verified": true
+        },
+        "sweep": {
+          "frames": 849,
+          "seconds": 980.2367671669926,
+          "end_to_end_fps": 0.8661172774142278,
+          "step_fps": 0.8727728868781072,
+          "sam_frames": 849,
+          "sam_fraction": 1.0,
+          "config_sha256": "39540e7c9e55a6d7fba41a5e06155edce481660ecca6d7c46b4e95b931552ca5",
+          "implementation_sha256": "2fbe3e0d56cb78db6e345897c8550dd4102efb8483fa9b40a9018d9648a064dc",
+          "load_verified": true
+        },
+        "greycloth": {
+          "frames": 453,
+          "seconds": 803.3517750869505,
+          "end_to_end_fps": 0.5638874700326264,
+          "step_fps": 0.5675792769662737,
+          "sam_frames": 453,
+          "sam_fraction": 1.0,
+          "config_sha256": "39540e7c9e55a6d7fba41a5e06155edce481660ecca6d7c46b4e95b931552ca5",
+          "implementation_sha256": "d7de18866a8329a393db3d0b64a246eb6d5b62522566b7b564040090d2b77664",
+          "load_verified": true
+        }
+      },
+      "objects": {
+        "mug": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 499,
+              "mean_iou": 0.7981769801311573,
+              "median_iou": 0.8678038379530917,
+              "pass_iou_05": 0.9378757515030061,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 469,
+              "depth_median_mm": 5.815446376800537,
+              "depth_pass_fraction": 0.8187633262260128
+            },
+            "side": {
+              "frames": 499,
+              "mean_iou": 0.8668187211506133,
+              "median_iou": 0.8573017049666419,
+              "pass_iou_05": 1.0,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 499,
+              "depth_median_mm": 7.857412338256836,
+              "depth_pass_fraction": 0.5691382765531062
+            }
+          }
+        },
+        "stand": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 499,
+              "mean_iou": 0.8213036524343224,
+              "median_iou": 0.8758758758758759,
+              "pass_iou_05": 1.0,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 499,
+              "depth_median_mm": 3.5955309867858887,
+              "depth_pass_fraction": 0.9278557114228457
+            },
+            "side": {
+              "frames": 499,
+              "mean_iou": 0.8853392255439563,
+              "median_iou": 0.8946686412439837,
+              "pass_iou_05": 1.0,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 499,
+              "depth_median_mm": 5.444272994995117,
+              "depth_pass_fraction": 1.0
+            }
+          }
+        },
+        "broom": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 845,
+              "mean_iou": 0.7339408857282246,
+              "median_iou": 0.7798469387755103,
+              "pass_iou_05": 0.9041420118343195,
+              "small_reference_false_positive_frames": 4,
+              "depth_frames": 826,
+              "depth_median_mm": 8.20004940032959,
+              "depth_pass_fraction": 0.559322033898305
+            },
+            "side": {
+              "frames": 840,
+              "mean_iou": 0.7781927875895592,
+              "median_iou": 0.8113624071237131,
+              "pass_iou_05": 0.9726190476190476,
+              "small_reference_false_positive_frames": 5,
+              "depth_frames": 836,
+              "depth_median_mm": 10.697945594787598,
+              "depth_pass_fraction": 0.1339712918660287
+            }
+          }
+        },
+        "dustpan": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 849,
+              "mean_iou": 0.8237297607424167,
+              "median_iou": 0.884744947064485,
+              "pass_iou_05": 0.9305064782096584,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 847,
+              "depth_median_mm": 14.864057540893555,
+              "depth_pass_fraction": 0.28807556080283353
+            },
+            "side": {
+              "frames": 849,
+              "mean_iou": 0.8510991547282281,
+              "median_iou": 0.8831884870572844,
+              "pass_iou_05": 0.9764428739693758,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 848,
+              "depth_median_mm": 11.806845664978027,
+              "depth_pass_fraction": 0.08962264150943396
+            }
+          }
+        },
+        "debris": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 698,
+              "mean_iou": 0.7797318190143374,
+              "median_iou": 0.8512362637362637,
+              "pass_iou_05": 0.9154727793696275,
+              "small_reference_false_positive_frames": 7,
+              "depth_frames": 701,
+              "depth_median_mm": 2.6969313621520996,
+              "depth_pass_fraction": 0.7375178316690443
+            },
+            "side": {
+              "frames": 674,
+              "mean_iou": 0.8423448834898158,
+              "median_iou": 0.8739279083657719,
+              "pass_iou_05": 0.9762611275964391,
+              "small_reference_false_positive_frames": 100,
+              "depth_frames": 763,
+              "depth_median_mm": 9.599864959716797,
+              "depth_pass_fraction": 0.6002621231979031
+            }
+          }
+        },
+        "box": {
+          "reference": "fixed_n10_consistency_only",
+          "cameras": {
+            "top": {
+              "frames": 802,
+              "mean_iou": 0.62175499836687,
+              "median_iou": 0.65620459603448,
+              "pass_iou_05": 0.8516209476309227,
+              "small_reference_false_positive_frames": 4,
+              "depth_frames": 764,
+              "depth_median_mm": 4.935860633850098,
+              "depth_pass_fraction": 0.9633507853403142
+            },
+            "side": {
+              "frames": 849,
+              "mean_iou": 0.9065281150907969,
+              "median_iou": 0.9342644603005921,
+              "pass_iou_05": 0.9717314487632509,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 849,
+              "depth_median_mm": 6.751775741577148,
+              "depth_pass_fraction": 0.9976442873969376
+            }
+          }
+        },
+        "cloth": {
+          "reference": "fixed_every_frame_cloth_proxy",
+          "cameras": {
+            "top": {
+              "frames": 453,
+              "mean_iou": 0.7834261307008249,
+              "median_iou": 0.7604896169539005,
+              "pass_iou_05": 0.9977924944812362,
+              "mean_mask_coverage": 0.8254146815892122,
+              "depth_median_mm": 5.85484504699707
+            },
+            "side": {
+              "frames": 453,
+              "mean_iou": 0.8073329314532295,
+              "median_iou": 0.8413220880831195,
+              "pass_iou_05": 1.0,
+              "mean_mask_coverage": 0.8332073889260586,
+              "depth_median_mm": 7.975637912750244
+            }
+          },
+          "phases": {
+            "before_lift": {
+              "top": {
+                "iou": 0.8664528927113806,
+                "mask_recall": 0.9630085755205703,
+                "depth_med_mm": 1.9324719905853271,
+                "depth_p90_mm": 8.03238115310669
+              },
+              "side": {
+                "iou": 0.8934541738865432,
+                "mask_recall": 0.9200783744757265,
+                "depth_med_mm": 2.1843239068984985,
+                "depth_p90_mm": 14.711888265609744
+              }
+            },
+            "first_fold": {
+              "top": {
+                "iou": 0.7733845621663348,
+                "mask_recall": 0.7830959319690156,
+                "depth_med_mm": 8.0370454788208,
+                "depth_p90_mm": 30.85560760498047
+              },
+              "side": {
+                "iou": 0.8470312543773657,
+                "mask_recall": 0.8789186898100352,
+                "depth_med_mm": 10.716713905334473,
+                "depth_p90_mm": 44.29646911621094
+              }
+            },
+            "between_folds": {
+              "top": {
+                "iou": 0.6871668206695571,
+                "mask_recall": 0.694676514509424,
+                "depth_med_mm": 5.806088447570801,
+                "depth_p90_mm": 17.88653221130371
+              },
+              "side": {
+                "iou": 0.830903570622036,
+                "mask_recall": 0.848743987172635,
+                "depth_med_mm": 10.2766752243042,
+                "depth_p90_mm": 42.856544494628906
+              }
+            },
+            "second_fold": {
+              "top": {
+                "iou": 0.7151566945166148,
+                "mask_recall": 0.7745030666218476,
+                "depth_med_mm": 7.018476963043213,
+                "depth_p90_mm": 24.206506729125984
+              },
+              "side": {
+                "iou": 0.6340198818736291,
+                "mask_recall": 0.650274673782316,
+                "depth_med_mm": 8.008368492126465,
+                "depth_p90_mm": 23.307276725769043
+              }
+            }
+          }
+        }
+      },
+      "complete": true,
+      "macro_common_iou": 0.8142864110588905
+    },
+    "2": {
+      "tasks": {
+        "hang": {
+          "frames": 499,
+          "seconds": 253.55114949005656,
+          "end_to_end_fps": 1.9680447160408916,
+          "step_fps": 2.006256274742149,
+          "sam_frames": 250,
+          "sam_fraction": 0.501002004008016,
+          "config_sha256": "86e196e06e6073bdf096de7f0a1ff0e5849ff25c82a2d3ba913fc467d9c44133",
+          "implementation_sha256": "25679bdac8c5056817dd42a2fe12b2833203775a0443783a7642a4fc391628c2",
+          "load_verified": true
+        },
+        "sweep": {
+          "frames": 849,
+          "seconds": 620.3841438549571,
+          "end_to_end_fps": 1.3685069297942796,
+          "step_fps": 1.385081373110528,
+          "sam_frames": 425,
+          "sam_fraction": 0.5005889281507656,
+          "config_sha256": "86e196e06e6073bdf096de7f0a1ff0e5849ff25c82a2d3ba913fc467d9c44133",
+          "implementation_sha256": "2fbe3e0d56cb78db6e345897c8550dd4102efb8483fa9b40a9018d9648a064dc",
+          "load_verified": true
+        },
+        "greycloth": {
+          "frames": 453,
+          "seconds": 937.5753070658538,
+          "end_to_end_fps": 0.4831611888517687,
+          "step_fps": 0.4858692822812758,
+          "sam_frames": 227,
+          "sam_fraction": 0.5011037527593819,
+          "config_sha256": "86e196e06e6073bdf096de7f0a1ff0e5849ff25c82a2d3ba913fc467d9c44133",
+          "implementation_sha256": "d7de18866a8329a393db3d0b64a246eb6d5b62522566b7b564040090d2b77664",
+          "load_verified": true
+        }
+      },
+      "objects": {
+        "mug": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 499,
+              "mean_iou": 0.7917620275122373,
+              "median_iou": 0.8633603238866396,
+              "pass_iou_05": 0.9338677354709419,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 482,
+              "depth_median_mm": 5.522340297698975,
+              "depth_pass_fraction": 0.8298755186721992
+            },
+            "side": {
+              "frames": 499,
+              "mean_iou": 0.8521087727465432,
+              "median_iou": 0.8511465215701516,
+              "pass_iou_05": 1.0,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 499,
+              "depth_median_mm": 6.866335868835449,
+              "depth_pass_fraction": 0.7214428857715431
+            }
+          }
+        },
+        "stand": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 499,
+              "mean_iou": 0.8158593522528573,
+              "median_iou": 0.8631368631368631,
+              "pass_iou_05": 0.9939879759519038,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 499,
+              "depth_median_mm": 3.5392045974731445,
+              "depth_pass_fraction": 0.8917835671342685
+            },
+            "side": {
+              "frames": 499,
+              "mean_iou": 0.875938915672073,
+              "median_iou": 0.8875045142650776,
+              "pass_iou_05": 1.0,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 499,
+              "depth_median_mm": 5.206942558288574,
+              "depth_pass_fraction": 1.0
+            }
+          }
+        },
+        "broom": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 845,
+              "mean_iou": 0.7413593847858798,
+              "median_iou": 0.7662858907070084,
+              "pass_iou_05": 0.9573964497041421,
+              "small_reference_false_positive_frames": 3,
+              "depth_frames": 841,
+              "depth_median_mm": 7.782876491546631,
+              "depth_pass_fraction": 0.558858501783591
+            },
+            "side": {
+              "frames": 840,
+              "mean_iou": 0.7853212272150958,
+              "median_iou": 0.8048149196993405,
+              "pass_iou_05": 0.9845238095238096,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 839,
+              "depth_median_mm": 9.872943878173828,
+              "depth_pass_fraction": 0.17520858164481526
+            }
+          }
+        },
+        "dustpan": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 849,
+              "mean_iou": 0.822726718924778,
+              "median_iou": 0.8804608737397984,
+              "pass_iou_05": 0.9422850412249706,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 844,
+              "depth_median_mm": 13.182863235473633,
+              "depth_pass_fraction": 0.3187203791469194
+            },
+            "side": {
+              "frames": 849,
+              "mean_iou": 0.8562151483270617,
+              "median_iou": 0.8821083819172322,
+              "pass_iou_05": 0.9964664310954063,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 849,
+              "depth_median_mm": 11.244148254394531,
+              "depth_pass_fraction": 0.1166077738515901
+            }
+          }
+        },
+        "debris": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 698,
+              "mean_iou": 0.6364952830370638,
+              "median_iou": 0.8262464122461997,
+              "pass_iou_05": 0.7535816618911175,
+              "small_reference_false_positive_frames": 36,
+              "depth_frames": 726,
+              "depth_median_mm": 2.7684569358825684,
+              "depth_pass_fraction": 0.7052341597796143
+            },
+            "side": {
+              "frames": 674,
+              "mean_iou": 0.830522686609313,
+              "median_iou": 0.8741553668447244,
+              "pass_iou_05": 0.9703264094955489,
+              "small_reference_false_positive_frames": 138,
+              "depth_frames": 784,
+              "depth_median_mm": 9.499370574951172,
+              "depth_pass_fraction": 0.6428571428571429
+            }
+          }
+        },
+        "box": {
+          "reference": "fixed_n10_consistency_only",
+          "cameras": {
+            "top": {
+              "frames": 802,
+              "mean_iou": 0.6338618914021361,
+              "median_iou": 0.6447773561552528,
+              "pass_iou_05": 0.8603491271820449,
+              "small_reference_false_positive_frames": 5,
+              "depth_frames": 767,
+              "depth_median_mm": 5.519747734069824,
+              "depth_pass_fraction": 0.9765319426336375
+            },
+            "side": {
+              "frames": 849,
+              "mean_iou": 0.9210427708802665,
+              "median_iou": 0.9350961538461539,
+              "pass_iou_05": 0.9964664310954063,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 849,
+              "depth_median_mm": 6.732523441314697,
+              "depth_pass_fraction": 1.0
+            }
+          }
+        },
+        "cloth": {
+          "reference": "fixed_every_frame_cloth_proxy",
+          "cameras": {
+            "top": {
+              "frames": 453,
+              "mean_iou": 0.6630336027969715,
+              "median_iou": 0.6900237307771362,
+              "pass_iou_05": 0.7593818984547461,
+              "mean_mask_coverage": 0.7340459928318819,
+              "depth_median_mm": 4.900634288787842
+            },
+            "side": {
+              "frames": 453,
+              "mean_iou": 0.701668024090813,
+              "median_iou": 0.8295653478717551,
+              "pass_iou_05": 0.7593818984547461,
+              "mean_mask_coverage": 0.7456502011318735,
+              "depth_median_mm": 7.520228385925293
+            }
+          },
+          "phases": {
+            "before_lift": {
+              "top": {
+                "iou": 0.8664528927113806,
+                "mask_recall": 0.9630085755205703,
+                "depth_med_mm": 1.9324719905853271,
+                "depth_p90_mm": 8.03238115310669
+              },
+              "side": {
+                "iou": 0.8937824996905925,
+                "mask_recall": 0.9200783744757265,
+                "depth_med_mm": 2.1843239068984985,
+                "depth_p90_mm": 14.711888265609744
+              }
+            },
+            "first_fold": {
+              "top": {
+                "iou": 0.7658569936959705,
+                "mask_recall": 0.775261065441175,
+                "depth_med_mm": 7.784649610519409,
+                "depth_p90_mm": 29.978759765625007
+              },
+              "side": {
+                "iou": 0.8443540723301048,
+                "mask_recall": 0.8782500308067797,
+                "depth_med_mm": 9.474113464355469,
+                "depth_p90_mm": 38.5888095855713
+              }
+            },
+            "between_folds": {
+              "top": {
+                "iou": 0.682417872377853,
+                "mask_recall": 0.6908773479733283,
+                "depth_med_mm": 4.713594913482666,
+                "depth_p90_mm": 16.97764911651611
+              },
+              "side": {
+                "iou": 0.8191869918699187,
+                "mask_recall": 0.8358250913644611,
+                "depth_med_mm": 7.867127418518066,
+                "depth_p90_mm": 37.21789169311524
+              }
+            },
+            "second_fold": {
+              "top": {
+                "iou": 0.21793731826855525,
+                "mask_recall": 0.3751093895572398,
+                "depth_med_mm": 16.185909271240234,
+                "depth_p90_mm": 48.52651023864746
+              },
+              "side": {
+                "iou": 0.23328511394436233,
+                "mask_recall": 0.32548174103208677,
+                "depth_med_mm": 27.892708778381348,
+                "depth_p90_mm": 52.471589660644526
+              }
+            }
+          }
+        }
+      },
+      "complete": true,
+      "macro_common_iou": 0.7810842619975573
+    },
+    "3": {
+      "tasks": {
+        "hang": {
+          "frames": 499,
+          "seconds": 200.39154846710153,
+          "end_to_end_fps": 2.490124976911994,
+          "step_fps": 2.5533349456672645,
+          "sam_frames": 167,
+          "sam_fraction": 0.3346693386773547,
+          "config_sha256": "61176bf48c0b4c590722348315eeadefc4fe71c6154c45b266fa18d34497b56c",
+          "implementation_sha256": "25679bdac8c5056817dd42a2fe12b2833203775a0443783a7642a4fc391628c2",
+          "load_verified": true
+        },
+        "sweep": {
+          "frames": 849,
+          "seconds": 502.74651755113155,
+          "end_to_end_fps": 1.6887237809929792,
+          "step_fps": 1.7157714828269852,
+          "sam_frames": 283,
+          "sam_fraction": 0.3333333333333333,
+          "config_sha256": "61176bf48c0b4c590722348315eeadefc4fe71c6154c45b266fa18d34497b56c",
+          "implementation_sha256": "2fbe3e0d56cb78db6e345897c8550dd4102efb8483fa9b40a9018d9648a064dc",
+          "load_verified": true
+        },
+        "greycloth": {
+          "frames": 453,
+          "seconds": 760.901013529161,
+          "end_to_end_fps": 0.5953468216567688,
+          "step_fps": 0.5994530139157241,
+          "sam_frames": 151,
+          "sam_fraction": 0.3333333333333333,
+          "config_sha256": "61176bf48c0b4c590722348315eeadefc4fe71c6154c45b266fa18d34497b56c",
+          "implementation_sha256": "d7de18866a8329a393db3d0b64a246eb6d5b62522566b7b564040090d2b77664",
+          "load_verified": true
+        }
+      },
+      "objects": {
+        "mug": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 499,
+              "mean_iou": 0.7858811738061143,
+              "median_iou": 0.8637059724349158,
+              "pass_iou_05": 0.9298597194388778,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 482,
+              "depth_median_mm": 5.787715435028076,
+              "depth_pass_fraction": 0.8402489626556017
+            },
+            "side": {
+              "frames": 499,
+              "mean_iou": 0.8454845632101365,
+              "median_iou": 0.8512802525429674,
+              "pass_iou_05": 1.0,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 499,
+              "depth_median_mm": 7.059335708618164,
+              "depth_pass_fraction": 0.685370741482966
+            }
+          }
+        },
+        "stand": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 499,
+              "mean_iou": 0.8131741221083693,
+              "median_iou": 0.8584547181760608,
+              "pass_iou_05": 0.9939879759519038,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 499,
+              "depth_median_mm": 3.512144088745117,
+              "depth_pass_fraction": 0.9038076152304609
+            },
+            "side": {
+              "frames": 499,
+              "mean_iou": 0.8733655526202794,
+              "median_iou": 0.8850762527233116,
+              "pass_iou_05": 1.0,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 499,
+              "depth_median_mm": 5.035161972045898,
+              "depth_pass_fraction": 1.0
+            }
+          }
+        },
+        "broom": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 845,
+              "mean_iou": 0.7338252155754766,
+              "median_iou": 0.775811209439528,
+              "pass_iou_05": 0.9396449704142011,
+              "small_reference_false_positive_frames": 3,
+              "depth_frames": 832,
+              "depth_median_mm": 7.895439624786377,
+              "depth_pass_fraction": 0.5300480769230769
+            },
+            "side": {
+              "frames": 840,
+              "mean_iou": 0.7752866860544417,
+              "median_iou": 0.7991747029135131,
+              "pass_iou_05": 0.975,
+              "small_reference_false_positive_frames": 1,
+              "depth_frames": 840,
+              "depth_median_mm": 9.872913360595703,
+              "depth_pass_fraction": 0.14166666666666666
+            }
+          }
+        },
+        "dustpan": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 849,
+              "mean_iou": 0.820310711778221,
+              "median_iou": 0.8781190019193857,
+              "pass_iou_05": 0.9458186101295641,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 843,
+              "depth_median_mm": 12.898802757263184,
+              "depth_pass_fraction": 0.31316725978647686
+            },
+            "side": {
+              "frames": 849,
+              "mean_iou": 0.8430290874020985,
+              "median_iou": 0.8806668896001528,
+              "pass_iou_05": 0.9882214369846879,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 847,
+              "depth_median_mm": 11.812389373779297,
+              "depth_pass_fraction": 0.11688311688311688
+            }
+          }
+        },
+        "debris": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 698,
+              "mean_iou": 0.7567141461544831,
+              "median_iou": 0.8514431644602851,
+              "pass_iou_05": 0.8939828080229226,
+              "small_reference_false_positive_frames": 25,
+              "depth_frames": 690,
+              "depth_median_mm": 2.4145394563674927,
+              "depth_pass_fraction": 0.8797101449275362
+            },
+            "side": {
+              "frames": 674,
+              "mean_iou": 0.8082395195874756,
+              "median_iou": 0.8619469026548673,
+              "pass_iou_05": 0.9525222551928784,
+              "small_reference_false_positive_frames": 11,
+              "depth_frames": 670,
+              "depth_median_mm": 9.338379383087158,
+              "depth_pass_fraction": 0.7417910447761195
+            }
+          }
+        },
+        "box": {
+          "reference": "fixed_n10_consistency_only",
+          "cameras": {
+            "top": {
+              "frames": 802,
+              "mean_iou": 0.6244762733469393,
+              "median_iou": 0.6585982339379248,
+              "pass_iou_05": 0.8541147132169576,
+              "small_reference_false_positive_frames": 4,
+              "depth_frames": 764,
+              "depth_median_mm": 4.668936014175415,
+              "depth_pass_fraction": 0.9856020942408377
+            },
+            "side": {
+              "frames": 849,
+              "mean_iou": 0.9209477277379887,
+              "median_iou": 0.9346814315519179,
+              "pass_iou_05": 0.9964664310954063,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 849,
+              "depth_median_mm": 6.810426712036133,
+              "depth_pass_fraction": 1.0
+            }
+          }
+        },
+        "cloth": {
+          "reference": "fixed_every_frame_cloth_proxy",
+          "cameras": {
+            "top": {
+              "frames": 453,
+              "mean_iou": 0.7936266635451985,
+              "median_iou": 0.7734110859517975,
+              "pass_iou_05": 1.0,
+              "mean_mask_coverage": 0.83284545620273,
+              "depth_median_mm": 4.520267486572266
+            },
+            "side": {
+              "frames": 453,
+              "mean_iou": 0.8159632720928063,
+              "median_iou": 0.8410301741644169,
+              "pass_iou_05": 1.0,
+              "mean_mask_coverage": 0.847011267739328,
+              "depth_median_mm": 6.926596164703369
+            }
+          },
+          "phases": {
+            "before_lift": {
+              "top": {
+                "iou": 0.8664528927113806,
+                "mask_recall": 0.9630085755205703,
+                "depth_med_mm": 1.9324719905853271,
+                "depth_p90_mm": 8.03238115310669
+              },
+              "side": {
+                "iou": 0.8940181913065284,
+                "mask_recall": 0.9201202224717618,
+                "depth_med_mm": 2.1843239068984985,
+                "depth_p90_mm": 14.711888265609744
+              }
+            },
+            "first_fold": {
+              "top": {
+                "iou": 0.8035541805075597,
+                "mask_recall": 0.8095673087356658,
+                "depth_med_mm": 6.447524070739746,
+                "depth_p90_mm": 25.446458721160887
+              },
+              "side": {
+                "iou": 0.8560996892431902,
+                "mask_recall": 0.8892711068186774,
+                "depth_med_mm": 7.563471794128418,
+                "depth_p90_mm": 34.00579776763916
+              }
+            },
+            "between_folds": {
+              "top": {
+                "iou": 0.7091901044116263,
+                "mask_recall": 0.717258883248731,
+                "depth_med_mm": 4.44921875,
+                "depth_p90_mm": 16.208994293212893
+              },
+              "side": {
+                "iou": 0.8117371009210953,
+                "mask_recall": 0.8356965841445032,
+                "depth_med_mm": 7.612347602844238,
+                "depth_p90_mm": 37.13635253906252
+              }
+            },
+            "second_fold": {
+              "top": {
+                "iou": 0.7317871820033339,
+                "mask_recall": 0.7736605922864916,
+                "depth_med_mm": 6.741583347320557,
+                "depth_p90_mm": 19.972026443481447
+              },
+              "side": {
+                "iou": 0.6770825710210846,
+                "mask_recall": 0.7094882531878554,
+                "depth_med_mm": 7.2212440967559814,
+                "depth_p90_mm": 21.907433414459227
+              }
+            }
+          }
+        }
+      },
+      "complete": true,
+      "macro_common_iou": 0.8054083928279251
+    },
+    "10": {
+      "tasks": {
+        "hang": {
+          "frames": 499,
+          "seconds": 125.45654773991555,
+          "end_to_end_fps": 3.9774727504416814,
+          "step_fps": 4.150939026174497,
+          "sam_frames": 53,
+          "sam_fraction": 0.1062124248496994,
+          "config_sha256": "dc55502678bf627126c3a62ecc83606bb1f4d6a2b148dafb4ce085e8e24b68df",
+          "implementation_sha256": "25679bdac8c5056817dd42a2fe12b2833203775a0443783a7642a4fc391628c2",
+          "load_verified": true
+        },
+        "sweep": {
+          "frames": 849,
+          "seconds": 340.9409785680473,
+          "end_to_end_fps": 2.4901670769110873,
+          "step_fps": 2.5519366143182003,
+          "sam_frames": 106,
+          "sam_fraction": 0.1248527679623086,
+          "config_sha256": "dc55502678bf627126c3a62ecc83606bb1f4d6a2b148dafb4ce085e8e24b68df",
+          "implementation_sha256": "2fbe3e0d56cb78db6e345897c8550dd4102efb8483fa9b40a9018d9648a064dc",
+          "load_verified": true
+        },
+        "greycloth": {
+          "frames": 453,
+          "seconds": 848.2037759840023,
+          "end_to_end_fps": 0.5340697752429528,
+          "step_fps": 0.5374524828779916,
+          "sam_frames": 47,
+          "sam_fraction": 0.10375275938189846,
+          "config_sha256": "dc55502678bf627126c3a62ecc83606bb1f4d6a2b148dafb4ce085e8e24b68df",
+          "implementation_sha256": "d7de18866a8329a393db3d0b64a246eb6d5b62522566b7b564040090d2b77664",
+          "load_verified": true
+        }
+      },
+      "objects": {
+        "mug": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 499,
+              "mean_iou": 0.7744945827654305,
+              "median_iou": 0.8616636528028933,
+              "pass_iou_05": 0.9278557114228457,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 486,
+              "depth_median_mm": 5.916871070861816,
+              "depth_pass_fraction": 0.7983539094650206
+            },
+            "side": {
+              "frames": 499,
+              "mean_iou": 0.8230446259292665,
+              "median_iou": 0.8312368972746331,
+              "pass_iou_05": 0.9959919839679359,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 499,
+              "depth_median_mm": 6.14321231842041,
+              "depth_pass_fraction": 0.7374749498997996
+            }
+          }
+        },
+        "stand": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 499,
+              "mean_iou": 0.7878823784053183,
+              "median_iou": 0.8326732673267326,
+              "pass_iou_05": 0.9819639278557114,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 499,
+              "depth_median_mm": 3.6244094371795654,
+              "depth_pass_fraction": 0.9258517034068137
+            },
+            "side": {
+              "frames": 499,
+              "mean_iou": 0.8652001938520752,
+              "median_iou": 0.8850248403122782,
+              "pass_iou_05": 1.0,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 499,
+              "depth_median_mm": 4.863709449768066,
+              "depth_pass_fraction": 1.0
+            }
+          }
+        },
+        "broom": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 845,
+              "mean_iou": 0.7639193777108095,
+              "median_iou": 0.8006993006993007,
+              "pass_iou_05": 0.9763313609467456,
+              "small_reference_false_positive_frames": 1,
+              "depth_frames": 837,
+              "depth_median_mm": 7.074624061584473,
+              "depth_pass_fraction": 0.6296296296296297
+            },
+            "side": {
+              "frames": 840,
+              "mean_iou": 0.7792476093117243,
+              "median_iou": 0.812887938810662,
+              "pass_iou_05": 0.9678571428571429,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 839,
+              "depth_median_mm": 9.454816818237305,
+              "depth_pass_fraction": 0.16567342073897498
+            }
+          }
+        },
+        "dustpan": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 849,
+              "mean_iou": 0.8189595004256756,
+              "median_iou": 0.8762316750781062,
+              "pass_iou_05": 0.9481743227326266,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 835,
+              "depth_median_mm": 13.304651260375977,
+              "depth_pass_fraction": 0.3389221556886228
+            },
+            "side": {
+              "frames": 849,
+              "mean_iou": 0.8415944106259691,
+              "median_iou": 0.8807388634369822,
+              "pass_iou_05": 0.9988221436984688,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 849,
+              "depth_median_mm": 11.23417854309082,
+              "depth_pass_fraction": 0.1625441696113074
+            }
+          }
+        },
+        "debris": {
+          "reference": "Q28_evaluation_only",
+          "cameras": {
+            "top": {
+              "frames": 698,
+              "mean_iou": 0.7649416559654824,
+              "median_iou": 0.8434959349593496,
+              "pass_iou_05": 0.9111747851002865,
+              "small_reference_false_positive_frames": 7,
+              "depth_frames": 683,
+              "depth_median_mm": 2.659916877746582,
+              "depth_pass_fraction": 0.8960468521229868
+            },
+            "side": {
+              "frames": 674,
+              "mean_iou": 0.7927275956208282,
+              "median_iou": 0.860606187817472,
+              "pass_iou_05": 0.9540059347181009,
+              "small_reference_false_positive_frames": 35,
+              "depth_frames": 703,
+              "depth_median_mm": 9.25809097290039,
+              "depth_pass_fraction": 0.7069701280227596
+            }
+          }
+        },
+        "box": {
+          "reference": "fixed_n10_consistency_only",
+          "cameras": {
+            "top": {
+              "frames": 802,
+              "mean_iou": 0.6192938047831493,
+              "median_iou": 0.6579708082624733,
+              "pass_iou_05": 0.830423940149626,
+              "small_reference_false_positive_frames": 4,
+              "depth_frames": 758,
+              "depth_median_mm": 5.041435480117798,
+              "depth_pass_fraction": 0.9617414248021108
+            },
+            "side": {
+              "frames": 849,
+              "mean_iou": 0.9200565049592405,
+              "median_iou": 0.9291698400609292,
+              "pass_iou_05": 0.9964664310954063,
+              "small_reference_false_positive_frames": 0,
+              "depth_frames": 849,
+              "depth_median_mm": 7.43335485458374,
+              "depth_pass_fraction": 1.0
+            }
+          }
+        },
+        "cloth": {
+          "reference": "fixed_every_frame_cloth_proxy",
+          "cameras": {
+            "top": {
+              "frames": 453,
+              "mean_iou": 0.6844084225928312,
+              "median_iou": 0.7378073607250969,
+              "pass_iou_05": 0.7615894039735099,
+              "mean_mask_coverage": 0.7645642451846736,
+              "depth_median_mm": 4.497110843658447
+            },
+            "side": {
+              "frames": 453,
+              "mean_iou": 0.7044137560973963,
+              "median_iou": 0.8307621341807185,
+              "pass_iou_05": 0.7593818984547461,
+              "mean_mask_coverage": 0.7490612963010848,
+              "depth_median_mm": 7.22135591506958
+            }
+          },
+          "phases": {
+            "before_lift": {
+              "top": {
+                "iou": 0.8664528927113806,
+                "mask_recall": 0.9630085755205703,
+                "depth_med_mm": 1.9324719905853271,
+                "depth_p90_mm": 8.03238115310669
+              },
+              "side": {
+                "iou": 0.8935439555225713,
+                "mask_recall": 0.9201154783361137,
+                "depth_med_mm": 2.1843239068984985,
+                "depth_p90_mm": 14.711888265609744
+              }
+            },
+            "first_fold": {
+              "top": {
+                "iou": 0.7616579025791247,
+                "mask_recall": 0.7697889967156004,
+                "depth_med_mm": 7.804401159286499,
+                "depth_p90_mm": 30.977225685119627
+              },
+              "side": {
+                "iou": 0.8594698479549531,
+                "mask_recall": 0.8957043852406619,
+                "depth_med_mm": 7.707685232162476,
+                "depth_p90_mm": 29.816077899932864
+              }
+            },
+            "between_folds": {
+              "top": {
+                "iou": 0.7313639968279143,
+                "mask_recall": 0.7426699485991457,
+                "depth_med_mm": 4.362165927886963,
+                "depth_p90_mm": 18.016660308837917
+              },
+              "side": {
+                "iou": 0.819755266809638,
+                "mask_recall": 0.8285088724254691,
+                "depth_med_mm": 7.664680480957031,
+                "depth_p90_mm": 38.52113418579101
+              }
+            },
+            "second_fold": {
+              "top": {
+                "iou": 0.2607752461996009,
+                "mask_recall": 0.45432814531331445,
+                "depth_med_mm": 19.092931747436523,
+                "depth_p90_mm": 46.53288669586183
+              },
+              "side": {
+                "iou": 0.24443452883443972,
+                "mask_recall": 0.3367956652587619,
+                "depth_med_mm": 29.096126556396484,
+                "depth_p90_mm": 58.77416515350343
+              }
+            }
+          }
+        }
+      },
+      "complete": true,
+      "macro_common_iou": 0.7834028424419007
+    }
+  },
+  "accuracy_ranking": [
+    1,
+    3,
+    10,
+    2
+  ],
+  "selected_interval": 1,
+  "note": "Ranking excludes box consistency (no independent box mask) and requires separate depth/visual review. Cloth masks are a fixed proxy. One full validation episode per task; not a held-out generalization claim. More frequent SAM does not validate hidden cloth or physical deformation."
+}

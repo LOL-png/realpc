@@ -2,7 +2,7 @@
 
 The current entry point is `ScenePipeline.step(t, frames, q)` in `realpc/scene_pipeline.py`. Live inference and training-data conversion call this same function. It produces fixed-identity robot, rigid-object, static-scene and cloth points from current RGB-D and calibrated joints.
 
-The shared policy is **SAM every processed frame for every object**. This gave the highest equal-object mean silhouette overlap in full-episode comparisons of intervals 1, 2, 3 and 10. It does not win every object or depth metric. See [validation and limitations](docs/VALIDATION.md) for the complete accuracy/speed comparison and unresolved cloth deformation errors. The 52-episode conversion is paused until the shirt, parity checks, release and videos are ready; completed outputs are preserved.
+The shared policy is **SAM every processed frame for every object**. This gave the highest equal-object mean silhouette overlap in full-episode comparisons of intervals 1, 2, 3 and 10. It does not win every object or depth metric. See [validation and limitations](docs/VALIDATION.md) for the complete accuracy/speed comparison and unresolved cloth deformation errors. The dataset conversion is staged after the release checks and videos; earlier partial outputs are preserved.
 
 ## What runs
 
@@ -17,7 +17,7 @@ The shared policy is **SAM every processed frame for every object**. This gave t
 - Camera/arm calibration: `configs/calib_yam_rig_v3.json`, fixed three-frame joint lag and joint zero offsets.
 - Robot: `configs/yam_bimanual.json` and the YAM URDF/link meshes.
 - Rigid library: `assets/objects_v3/<task>/`, including the sweep tray, four-peg stand and asymmetric ear-shaped mug handle.
-- Cloth: clean single-sheet shirt outline fitted to frame 0; topology and material sample IDs persist afterward.
+- Cloth: fixed single-sheet rest asset under `assets/cloth/tshirt_candidate132/`, fitted offline using multi-view evidence across the episode. Current frame0 registration fits its pose/wrinkles; topology, rest metric and material sample IDs then persist.
 - Models: SAM2 small and online CoTracker under `.model_cache/`. SAM uses the checkpoint in the shared config; CoTracker defaults to the repo cache (`REALPC_MODEL_CACHE` can override its root). Its checkout is `hub/facebookresearch_co-tracker_main/` and checkpoint is `hub/checkpoints/scaled_online.pth`. Model weights and recordings are not committed.
 
 Install `requirements.txt` and `requirements-cloth.txt`, plus the matching PyTorch/PyTorch3D, Open3D and SAM2 packages. `ffmpeg` must be on PATH. The tested local environment is `/home/howardji/miniconda3/envs/myenv`; its Open3D build needs the system `libstdc++` preload below.
@@ -58,10 +58,10 @@ Supply consecutive ticks starting at zero and current top/side RGB-D. Wrist RGB-
 ## Validation and limits
 
 - `tests/check_scene_live_parity.py` compares live packets with converted points and masks while blocking recording access inside the live pipeline.
-- All cloth geometry remains **approximate**, including initialization. `cloth_valid` is the shared current-frame support/strain/crossing gate, not a frame-number cutoff or a hidden-material certificate. See [quality flags](docs/CLOTH_QUALITY_FLAGS.md). The historical default tracker has excessive stretch; the physically bounded replacement is still under validation.
+- All cloth geometry remains **approximate**, including initialization. `cloth_valid` is the shared current-frame support/strain/crossing/contact gate, not a frame-number cutoff or a hidden-material certificate. See [quality flags](docs/CLOTH_QUALITY_FLAGS.md). The selected tracker bounds local strain and uses collision-filtered fitting; brief held-contact lag triggers a bounded extra solve. Visible fold alignment remains approximate.
 - Dark/occluded rigid surfaces, fast motion and imperfect wrist calibration remain difficult. SAM recovery cannot correct a wrong mesh or calibration.
 - Playback frame rate is not extraction throughput. Final timings must include mask propagation, tracking and initialization; report the actual fraction of frames using SAM.
 
 Older conversion/segmentation scripts are retained for reproducible ablations, not as alternate production paths. Their former documentation is in [legacy pipelines](docs/LEGACY_PIPELINES.md).
 
-The current shirt candidate is `configs/experimental/scene_cloth136.json`, with a fixed offline rest asset under `assets/cloth/tshirt_candidate132/`. It is tested through this same scene pipeline, not a separate conversion path. It has not been promoted to the default config or approved for the full dataset. The candidate's full fold audit and cadence recheck must finish before the next shareable tag.
+The selected configuration includes the bounded cloth tracker and adaptive contact refinement validated in [the current report](docs/VALIDATION.md). Experimental configurations and historical runs remain available for comparison; production live use and conversion share the single default config.

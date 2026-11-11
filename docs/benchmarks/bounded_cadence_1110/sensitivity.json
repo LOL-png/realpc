@@ -1,0 +1,18 @@
+{
+  "1": {
+    "independent_rigids": 0.8180677870552632,
+    "including_box_proxy": 0.8146373434387174
+  },
+  "2": {
+    "independent_rigids": 0.8008309517082903,
+    "including_box_proxy": 0.8029082732553395
+  },
+  "3": {
+    "independent_rigids": 0.8055310778297097,
+    "including_box_proxy": 0.8066882336623137
+  },
+  "10": {
+    "independent_rigids": 0.801201193061258,
+    "including_box_proxy": 0.7984242438174428
+  }
+}

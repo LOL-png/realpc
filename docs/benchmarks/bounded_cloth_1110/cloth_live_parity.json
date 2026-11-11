@@ -1,0 +1,18 @@
+{
+  "task": "greycloth",
+  "frames": 32,
+  "maximum_point_difference_m": 5.960464477539063e-08,
+  "recorded_joint_and_video_access_blocked": true,
+  "config_sha256": "d088e01a20eb325320e906f8a2e25d9bbd5e50e4d88edfaa28d7af6c115ceceb",
+  "sam_frames": 32,
+  "exact_saved_masks": true,
+  "cloth_quality_flags_checked": true,
+  "recorded_low_dim_access_blocked_during_step": true,
+  "recorded_frame_and_camera_pose_access_blocked": true,
+  "live_constructor_uses_setup_only": true,
+  "live_setup_files": [
+    "calib.json",
+    "meta.json",
+    "table_region.json"
+  ]
+}
