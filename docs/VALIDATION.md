@@ -1,5 +1,7 @@
 # Shared scene pipeline validation — 2026-11-10
 
+This page records the completed cadence benchmark with the previous cloth tracker. Candidate 136 adds a fixed offline shirt asset, bounded deformation and material-aware grasp association; its full fold and cadence checks are still running. Do not attribute the historical cloth scores below to that candidate. Current code uses shared current-frame cloth quality flags ([definition](CLOTH_QUALITY_FLAGS.md)); the historical benchmark used a conservative frame-based exclusion. Master and the previous tag have not been replaced by the experimental candidate.
+
 The selected shared SAM interval is **1 processed frame**, for every object and both live inference and conversion. It has the highest equal-object mean silhouette overlap over the tested full episodes. N3 is better for cloth alone, and N10 is better for broom top-view overlap. Speed received no selection reward. See [all rate tables and references](benchmarks/sam_cadence_1110/README.md) and [decision and regressions](benchmarks/sam_cadence_1110/DECISION.md).
 
 | SAM interval | Mean object/camera IoU | Hang fps | Sweep fps | Cloth fps |

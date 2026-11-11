@@ -6,12 +6,14 @@ import argparse,copy,hashlib,json,os,subprocess,sys,time
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
+from realpc.scene_pipeline import load_scene_config
 p=argparse.ArgumentParser()
 p.add_argument('--out',required=True)
 p.add_argument('--rates',type=int,nargs='+',default=[10,1,2,3])
 p.add_argument('--episodes',nargs='+',default=['hang/episode_0000','sweep/episode_0000','greycloth/episode_0000'])
 a=p.parse_args();out=Path(a.out);out.mkdir(parents=True,exist_ok=True)
-base=json.loads((ROOT/'configs/scene_pipeline_v2.json').read_text())
+base=load_scene_config(ROOT/'configs/scene_pipeline_v2.json')
 env=dict(os.environ,OPENBLAS_NUM_THREADS='1',OMP_NUM_THREADS='2',MKL_NUM_THREADS='2',LD_PRELOAD='/usr/lib/x86_64-linux-gnu/libstdc++.so.6')
 commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
 plan=dict(rates=a.rates,episodes=a.episodes,base_config=base,commit=commit,

@@ -2,7 +2,7 @@
 
 The current entry point is `ScenePipeline.step(t, frames, q)` in `realpc/scene_pipeline.py`. Live inference and training-data conversion call this same function. It produces fixed-identity robot, rigid-object, static-scene and cloth points from current RGB-D and calibrated joints.
 
-The shared policy is **SAM every processed frame for every object**. This gave the highest equal-object mean silhouette overlap in full-episode comparisons of intervals 1, 2, 3 and 10. It does not win every object or depth metric. See [validation and limitations](docs/VALIDATION.md) for the complete accuracy/speed comparison and unresolved cloth deformation errors. The 52-episode conversion remains cancelled; completed outputs are preserved.
+The shared policy is **SAM every processed frame for every object**. This gave the highest equal-object mean silhouette overlap in full-episode comparisons of intervals 1, 2, 3 and 10. It does not win every object or depth metric. See [validation and limitations](docs/VALIDATION.md) for the complete accuracy/speed comparison and unresolved cloth deformation errors. The 52-episode conversion is paused until the shirt, parity checks, release and videos are ready; completed outputs are preserved.
 
 ## What runs
 
@@ -57,8 +57,10 @@ Supply consecutive ticks starting at zero and current top/side RGB-D. Wrist RGB-
 ## Validation and limits
 
 - `tests/check_scene_live_parity.py` compares live packets with converted points and masks while blocking recording access inside the live pipeline.
-- Cloth folds remain **approximate**: every-frame SAM reduces the second-fold tracking loss, but visible-surface alignment does not establish correct hidden material correspondence. Excessive stretch and residual grasp error remain. Fold frames are marked separately and excluded from the conservative `cloth_valid` gate.
+- All cloth geometry remains **approximate**, including initialization. `cloth_valid` is the shared current-frame support/strain/crossing gate, not a frame-number cutoff or a hidden-material certificate. See [quality flags](docs/CLOTH_QUALITY_FLAGS.md). The historical default tracker has excessive stretch; the physically bounded replacement is still under validation.
 - Dark/occluded rigid surfaces, fast motion and imperfect wrist calibration remain difficult. SAM recovery cannot correct a wrong mesh or calibration.
 - Playback frame rate is not extraction throughput. Final timings must include mask propagation, tracking and initialization; report the actual fraction of frames using SAM.
 
 Older conversion/segmentation scripts are retained for reproducible ablations, not as alternate production paths. Their former documentation is in [legacy pipelines](docs/LEGACY_PIPELINES.md).
+
+The current shirt candidate is `configs/experimental/scene_cloth136.json`, with a fixed offline rest asset under `assets/cloth/tshirt_candidate132/`. It is tested through this same scene pipeline, not a separate conversion path. It has not been promoted to the default config or approved for the full dataset. The candidate's full fold audit and cadence recheck must finish before the next shareable tag.
