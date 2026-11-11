@@ -45,6 +45,17 @@ material correspondence. Interpolated vertex paths are not exactly isometric.
 `global_slide` is a bounded, current-two-view translation recovery that preserves
 all edge lengths/self-distances and respects the table and held-point objective.
 `held_iters` increases iterations based only on current grasp state.
+`held_step` bounds each proposed solver displacement while held.
+
+`constraint_qp` activates an experimental joint sparse quadratic step at the
+first current-frame grasp and retains it thereafter. The initial unheld prefix
+uses the original registration solver. The QP combines linearized material,
+table and self-contact constraints with bounded incremental grasp targets;
+exact edge/collision checks still gate accepted results. It needs the optional
+`requirements-cloth-qp.txt` dependency. Its API follows the
+[official OSQP Python documentation](https://osqp.org/docs/interfaces/python.html).
+The one-frame diagnostic improved pickup progress; full-fold validation remains
+required. Solver failure explicitly retains the previous mesh.
 
 `contact_projection`, `constraint_restore`, and `compression_soft` are rejected
 or unproven diagnostics, default off. In particular, `compression_soft` does not

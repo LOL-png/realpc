@@ -70,7 +70,7 @@ def visible_vertices(X,F,K,T,shape):
     visible=np.zeros(len(X),bool);visible[vi]=True;return visible
 
 
-def joint_step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,max_stretch=0.,endpoint_projection=False,rays=None,table_plane=None,metric_bounds=False,contact_projection=False,constraint_restore=False,compression_soft=False):
+def joint_step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,max_stretch=0.,endpoint_projection=False,rays=None,table_plane=None,metric_bounds=False,contact_projection=False,constraint_restore=False,compression_soft=False,max_step=.025):
     """One sparse Gauss-Newton step jointly fitting observations and edge strain.
     Fixed contact centers are eliminated; all other contact targets remain soft.
     """
@@ -127,7 +127,7 @@ def joint_step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,max_stre
             KKT=sp.bmat([[Hff,Cf.T],[Cf,None]],format='csc')
             sol=sla.spsolve(KKT,np.r_[linear_rhs,-height[active]-C[:,fixed]@delta[fixed]])
             delta[free]=sol[:len(free)]
-    delta=delta.reshape(-1,3);norm=np.linalg.norm(delta,axis=1);raw_max=float(norm.max());clip_scale=min(1.,.025/max(raw_max,1e-12));delta*=clip_scale
+    delta=delta.reshape(-1,3);norm=np.linalg.norm(delta,axis=1);raw_max=float(norm.max());clip_scale=min(1.,max_step/max(raw_max,1e-12));delta*=clip_scale
     result=X+delta
     if endpoint_projection and max_stretch:result=project_extension_endpoint(result,V0,E,pi,limit=max_stretch*.1,two_sided=metric_bounds)
     if metric_bounds and contact is not None and contact_projection:

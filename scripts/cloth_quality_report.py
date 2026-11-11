@@ -14,7 +14,9 @@ def report(path,check_all=False):
     audit=[]
     for t in ticks:
         ratio=np.linalg.norm(X[t,E[:,0]]-X[t,E[:,1]],axis=1)/rest
-        audit.append(dict(t=int(t),intersects=bool(ipctk.has_intersections(mesh,np.asarray(X[t],float))),edge_ratio_p1_p50_p99=np.percentile(ratio,[1,50,99]).tolist(),max_extension=float(ratio.max()-1),max_compression=float(1-ratio.min())))
+        contacts=ipctk.NormalCollisions();contacts.build(mesh,np.asarray(X[t],float),.003)
+        gap=float(np.sqrt(contacts.compute_minimum_distance(mesh,np.asarray(X[t],float))))
+        audit.append(dict(t=int(t),intersects=bool(ipctk.has_intersections(mesh,np.asarray(X[t],float))),minimum_self_gap_mm=gap*1000 if np.isfinite(gap) else None,edge_ratio_p1_p50_p99=np.percentile(ratio,[1,50,99]).tolist(),max_extension=float(ratio.max()-1),max_compression=float(1-ratio.min())))
     metrics=json.loads((path/'metrics.json').read_text());phases={}
     for name,start,stop in [('before_lift',0,160),('first_fold',160,250),('between_folds',250,335),('second_fold',335,len(X))]:
         rows=metrics[start:min(stop,len(X))]
