@@ -25,6 +25,8 @@ def report(path,check_all=False):
         for cam in ('top','side'):
             summary[cam]={k:float(np.nanmedian([r['cameras'].get(cam,{}).get(k,np.nan) for r in rows])) for k in ('surface_to_mesh_med_mm','surface_to_mesh_p90_mm','surface_coverage_10mm')}
         summary['max_grasp_residual_mm']=max(r['grasp_error_mm'] for r in rows)
+        hard=[r['hard_grasp_error_mm'] for r in rows if r.get('hard_grasp_error_mm') is not None]
+        summary['max_hard_grasp_residual_mm']=max(hard) if hard else None
         phases[name]=summary
     result=dict(frames=len(X),phases=phases,physical_audit=audit,note='Observed-surface/mesh consistency only; hidden material correspondence is not ground truth. IPC audit checks geometric crossings, not finite clearance or all inter-frame tunneling.')
     (path/'quality_report.json').write_text(json.dumps(result,indent=2));return result

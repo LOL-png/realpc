@@ -116,6 +116,8 @@ def main():
                 endpoint_crossing_frames=sum(r['intersects'] for r in physics['physical_audit']),
                 audited_frames=len(physics['physical_audit']),
                 max_extension=max(r['max_extension'] for r in physics['physical_audit']),
+                max_compression=max(r['max_compression'] for r in physics['physical_audit']),
+                valid_frames=int(data['cloth_valid'].sum()),
                 phases=physics['phases'])
             if a.cloth_reference_inputs:
                 run(['scripts/cloth_multiview_audit.py', '--fit', 'unified=' + str(fit / 'mesh.npz'),
@@ -197,14 +199,16 @@ def main():
         lines.append('')
     for key, physics in cloth_physics.items():
         lines += ['## Cloth limitations: ' + key, '',
-            f"Endpoint crossings: {physics['endpoint_crossing_frames']}/{physics['audited_frames']}; worst local extension: {physics['max_extension']*100:.1f}%.",
+            f"Endpoint crossings: {physics['endpoint_crossing_frames']}/{physics['audited_frames']}; worst local extension/compression: {physics['max_extension']*100:.1f}%/{physics['max_compression']*100:.1f}%; valid frames: {physics['valid_frames']}/{physics['audited_frames']}.",
             'No endpoint crossings does not imply correct material correspondence, bounded stretch, or finite-thickness safety.', '',
-            '| Phase | Depth median top/side (mm) | Mask IoU top/side | Maximum grasp residual (mm) |',
-            '|---|---:|---:|---:|']
+            '| Phase | Depth median top/side (mm) | Mask IoU top/side | Soft grasp patch max (mm) | Contact centre max (mm) |',
+            '|---|---:|---:|---:|---:|']
         for phase, values in episodes.get(key, {}).items():
             residual = physics['phases'][phase]['max_grasp_residual_mm']
+            hard = physics['phases'][phase]['max_hard_grasp_residual_mm']
+            hard_text = f'{hard:.2f}' if hard is not None else 'unavailable'
             lines.append(f"| {phase} | {values['top']['depth_med_mm']:.2f}/{values['side']['depth_med_mm']:.2f} | "
-                         f"{values['top']['iou']:.3f}/{values['side']['iou']:.3f} | {residual:.1f} |")
+                         f"{values['top']['iou']:.3f}/{values['side']['iou']:.3f} | {residual:.1f} | {hard_text} |")
         lines += ['', 'All cloth geometry is approximate. Validity is a current-frame support/physical gate; the alignment audit includes invalid frames too.', '']
     (output / 'ALIGNMENT.md').write_text('\n'.join(lines))
 
