@@ -13,9 +13,17 @@ from .scene_masks import SceneMaskStream
 
 
 def load_scene_config(path):
-    config = json.loads(Path(path).read_text())
+    path = Path(path).expanduser().resolve()
+    config = json.loads(path.read_text())
     if config.get('version') != 1:
         raise ValueError('Unsupported scene pipeline config')
+    # Both live callers and conversion load the same offline assets, regardless
+    # of their working directory. Relative paths belong to the config file.
+    for section, key in (('cloth', 'shirt_asset'), ('segmentation', 'checkpoint')):
+        value = config.get(section, {}).get(key)
+        if value:
+            asset = Path(value).expanduser()
+            config[section][key] = str(asset if asset.is_absolute() else (path.parent / asset).resolve())
     return config
 
 
