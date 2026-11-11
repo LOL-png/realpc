@@ -1,0 +1,35 @@
+{
+  "hang": {
+    "task": "hang",
+    "frames": 12,
+    "maximum_point_difference_m": 5.960464477539063e-08,
+    "recorded_joint_and_video_access_blocked": true,
+    "config_sha256": "39540e7c9e55a6d7fba41a5e06155edce481660ecca6d7c46b4e95b931552ca5",
+    "sam_frames": 12,
+    "exact_saved_masks": true
+  },
+  "sweep": {
+    "task": "sweep",
+    "frames": 12,
+    "maximum_point_difference_m": 5.960464477539063e-08,
+    "recorded_joint_and_video_access_blocked": true,
+    "config_sha256": "39540e7c9e55a6d7fba41a5e06155edce481660ecca6d7c46b4e95b931552ca5",
+    "sam_frames": 12,
+    "exact_saved_masks": true
+  },
+  "greycloth": {
+    "task": "greycloth",
+    "frames": 12,
+    "maximum_point_difference_m": 5.960464477539063e-08,
+    "recorded_joint_and_video_access_blocked": true,
+    "config_sha256": "39540e7c9e55a6d7fba41a5e06155edce481660ecca6d7c46b4e95b931552ca5",
+    "sam_frames": 12,
+    "exact_saved_masks": true
+  },
+  "pipeline_tests": {
+    "passed": 4,
+    "skipped": 0,
+    "command": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 REALPC_TEST_EPISODE=/home/howardji/data_ext/agentwm_probe/hf/sweep/episode_0000 python -m pytest tests/test_pipeline.py -q"
+  },
+  "converted_files_load_verified": 12
+}

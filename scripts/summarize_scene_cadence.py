@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 
 p=argparse.ArgumentParser();p.add_argument('--root',required=True);p.add_argument('--out',required=True)
+p.add_argument('--selected',type=int,choices=[1,2,3,10],help='Set only after reviewing depth and visual regressions')
 a=p.parse_args();root=Path(a.root);out=Path(a.out);out.mkdir(parents=True,exist_ok=True)
 objects=['mug','stand','broom','dustpan','debris','box','cloth'];results={};csvrows=[];series={}
 for n in [1,2,3,10]:
@@ -73,13 +74,16 @@ if len(complete)==4:
         cohorts=[set(series[n][name]) for n in complete]
         assert all(x==cohorts[0] for x in cohorts),'Different reference-visible cohorts: '+name
 ranking=sorted(complete,key=lambda n:results[n]['macro_common_iou'],reverse=True)
+if a.selected is not None:
+    assert len(complete)==4, 'Finish all four rates before selecting'
 report=dict(rates=results,accuracy_ranking=ranking,
+    selected_interval=a.selected,
     note='Ranking excludes box consistency (no independent box mask) and requires separate depth/visual review. Cloth masks are a fixed proxy. One full validation episode per task; not a held-out generalization claim. More frequent SAM does not validate hidden cloth or physical deformation.')
 (out/'summary.json').write_text(json.dumps(report,indent=2))
 if csvrows:
     fields=list(dict.fromkeys(k for row in csvrows for k in row))
     with (out/'per_object_alignment.csv').open('w') as f:
-        w=csv.DictWriter(f,fieldnames=fields);w.writeheader();w.writerows(csvrows)
+        w=csv.DictWriter(f,fieldnames=fields,lineterminator='\n');w.writeheader();w.writerows(csvrows)
 def fmt(x):return 'pending' if x is None else f'{x:.3f}'
 lines=['# Unified SAM accuracy comparison','',report['note'],'',
        'Primary IoU uses reference-visible pixels (>=60 at audit resolution) with the SAME cohort at every cadence. Rigid reference: Q28; cloth: fixed current-frame masks/depth. Box scores are consistency only and excluded from the macro ranking.','',
@@ -111,7 +115,9 @@ for n in [1,2,3,10]:
 lines+=['','Actual SAM fractions, per-view IoU>=0.5 pass rates, depth, and step-only fps are in [CSV](per_object_alignment.csv) and [JSON](summary.json). Robot/table geometry does not depend on SAM cadence.',
         'A SAM refresh also invokes rigid silhouette refinement in the existing shared pipeline; this comparison measures the complete refresh policy.',
         'N10 cloth reuses the completed full control after exact source/config/asset hashes and output checksum verification; the other measured conversions are fresh.',
-        '', 'Accuracy ranking (completed rates): '+str(ranking)+'. Selection is pending visual/depth review.']
+        '', 'Accuracy ranking (completed rates): '+str(ranking)+'. '+
+        ('Selection is pending visual/depth review.' if a.selected is None else
+         f'Selected shared interval: **{a.selected}**. See [decision and visual review](DECISION.md) for trade-offs and verification.')]
 (out/'README.md').write_text('\n'.join(lines)+'\n')
 print('Completed accuracy ranking',[(n,results[n]['macro_common_iou']) for n in ranking])
 print('Ready objects',{n:list(r['objects']) for n,r in results.items()})

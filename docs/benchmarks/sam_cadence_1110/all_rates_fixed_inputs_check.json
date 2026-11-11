@@ -1,0 +1,80 @@
+{
+  "hang": {
+    "1": {
+      "robot_T": true,
+      "q_left": true,
+      "q_right": true,
+      "static_points": true
+    },
+    "2": {
+      "robot_T": true,
+      "q_left": true,
+      "q_right": true,
+      "static_points": true
+    },
+    "3": {
+      "robot_T": true,
+      "q_left": true,
+      "q_right": true,
+      "static_points": true
+    },
+    "10": {
+      "robot_T": true,
+      "q_left": true,
+      "q_right": true,
+      "static_points": true
+    }
+  },
+  "sweep": {
+    "1": {
+      "robot_T": true,
+      "q_left": true,
+      "q_right": true,
+      "static_points": true
+    },
+    "2": {
+      "robot_T": true,
+      "q_left": true,
+      "q_right": true,
+      "static_points": true
+    },
+    "3": {
+      "robot_T": true,
+      "q_left": true,
+      "q_right": true,
+      "static_points": true
+    },
+    "10": {
+      "robot_T": true,
+      "q_left": true,
+      "q_right": true,
+      "static_points": true
+    }
+  },
+  "greycloth": {
+    "1": {
+      "robot_T": true,
+      "q_left": true,
+      "q_right": true,
+      "static_points": true
+    },
+    "2": {
+      "robot_T": true,
+      "q_left": true,
+      "q_right": true,
+      "static_points": true
+    },
+    "3": {
+      "robot_T": true,
+      "q_left": true,
+      "q_right": true,
+      "static_points": true
+    },
+    "10": {
+      "robot_T": true,
+      "q_left": true,
+      "q_right": true,
+      "static_points": true
+    }
+  }
+}

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "segmentation": {
-    "interval": 10,
+    "interval": 1,
     "checkpoint": "/home/howardji/realpc/.model_cache/sam2/sam2.1_hiera_small.pt",
     "failure_cooldown": 8,
     "failure_frames": 3,
