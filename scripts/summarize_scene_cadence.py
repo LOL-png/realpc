@@ -100,6 +100,14 @@ for name in objects:
 lines+=['','| End-to-end fps | Every1 | Every2 | Every3 | Every10 |','|---|---|---|---|---|']
 for task in ['hang','sweep','greycloth']:
     lines.append('| '+task+' | '+' | '.join(fmt(results[n]['tasks'].get(task,{}).get('end_to_end_fps')) for n in [1,2,3,10])+' |')
+lines+=['','Cloth fold phase medians (top / side; fixed reference, hidden layers unmeasured):','',
+        '| Interval | First-fold IoU | Second-fold IoU | First-fold depth mm | Second-fold depth mm |',
+        '|---|---|---|---|---|']
+for n in [1,2,3,10]:
+    item=results[n]['objects'].get('cloth');cells=[]
+    for key,phase in [('iou','first_fold'),('iou','second_fold'),('depth_med_mm','first_fold'),('depth_med_mm','second_fold')]:
+        cells.append(' / '.join(fmt(item['phases'][phase][c][key]) for c in ['top','side']) if item else 'pending')
+    lines.append('| '+str(n)+' | '+' | '.join(cells)+' |')
 lines+=['','Actual SAM fractions, per-view IoU>=0.5 pass rates, depth, and step-only fps are in [CSV](per_object_alignment.csv) and [JSON](summary.json). Robot/table geometry does not depend on SAM cadence.',
         'A SAM refresh also invokes rigid silhouette refinement in the existing shared pipeline; this comparison measures the complete refresh policy.',
         'N10 cloth reuses the completed full control after exact source/config/asset hashes and output checksum verification; the other measured conversions are fresh.',
