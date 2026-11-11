@@ -44,7 +44,7 @@ class CausalClothTracker:
         keys=inspect.signature(cls).parameters
         return cls(**{k:v for k,v in config.items() if k in keys})
 
-    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False, landmark_grasp=False, init_landmarks=False, native_init_gain=None, shirt_layers=2, init_registration_iters=0, init_registration_strain=50., init_registration_arap=.2, init_registration_data=8., init_registration_coverage=20., init_registration_bending=.2, init_registration_contour=80., init_registration_focus=1., feasible_predict=False, contact_clearance=0., contact_stiffness=1e9, shirt_asset=None, global_slide=False, contact_projection=False, constraint_restore=False, compression_soft=False, held_iters=0, held_step=.025, constraint_qp=False, grasp_init_iters=0, constraint_conic=False, coverage_surface=False, robot_margin_m=.009, track_grasp=False, cot_grasp=False):
+    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False, landmark_grasp=False, init_landmarks=False, native_init_gain=None, shirt_layers=2, init_registration_iters=0, init_registration_strain=50., init_registration_arap=.2, init_registration_data=8., init_registration_coverage=20., init_registration_bending=.2, init_registration_contour=80., init_registration_focus=1., feasible_predict=False, contact_clearance=0., contact_stiffness=1e9, shirt_asset=None, global_slide=False, contact_projection=False, constraint_restore=False, compression_soft=False, held_iters=0, held_step=.025, constraint_qp=False, grasp_init_iters=0, constraint_conic=False, coverage_surface=False, robot_margin_m=.009, track_grasp=False, cot_grasp=False, contact_refine_iters=0, contact_refine_mm=1.):
         self.constraint_qp=constraint_qp;self.qp_active=False;self.constraint_conic=constraint_conic
         self.held_step=held_step
         self.held_iters=held_iters;self.grasp_init_iters=grasp_init_iters
@@ -54,6 +54,10 @@ class CausalClothTracker:
         self.global_slide=global_slide
         self.shirt_asset=shirt_asset
         self.cot_grasp=cot_grasp
+        self.contact_refine_iters=int(contact_refine_iters);self.contact_refine_mm=float(contact_refine_mm)
+        if contact_refine_iters and (not constraint_qp or dynamics):
+            raise ValueError("Contact refinement requires the metric-constrained quasistatic solver")
+        if contact_refine_iters<0 or contact_refine_mm<=0:raise ValueError("Invalid contact refinement budget/tolerance")
         if cot_grasp and not cot_weight:raise ValueError('CoTracker grasp voting requires cot_weight > 0 to supply online tracks')
         self.contact_stiffness=contact_stiffness
         self.contact_clearance=contact_clearance
@@ -623,7 +627,13 @@ class CausalClothTracker:
             ee,count=np.unique(edges,axis=0,return_counts=True);boundary=np.unique(ee[count==1])
             registration_contour=(P,boundary)
         total_iters=iters+(self.native_init_iters if self.dynamics and self.joint_physics and t==0 else 0)
-        for iteration in range(total_iters):
+        extra_budget=getattr(self,'contact_refine_iters',0) if len(hi) and self.constraint_qp and not self.dynamics else 0
+        iterations_run=0
+        for iteration in range(total_iters+extra_budget):
+            if iteration>=total_iters:
+                residual=np.max(np.linalg.norm(X[hi]-ht,axis=1))*1000
+                if residual<=self.contact_refine_mm:break
+            iterations_run+=1
             R=self.rotations(X);edge=np.einsum('nij,nj->ni',.5*(R[E[:,0]]+R[E[:,1]]),self.e0);b=np.zeros((n,3));np.add.at(b,E[:,0],edge);np.add.at(b,E[:,1],-edge)
             w=np.full(n,.15);rhs=.15*prior+self.wa*b
             surface_A=sp.csr_matrix((n,n))
@@ -732,6 +742,7 @@ class CausalClothTracker:
             _,_,_,checks,counts=self.track_features(v,X)
             if self.cot_weight:self.cot_constraints(frame,v,X)
         metrics=self.measure(v,checks,counts)
+        if extra_budget:metrics['contact_refinement']=dict(extra_iterations=max(0,iterations_run-total_iters),budget=extra_budget,tolerance_mm=self.contact_refine_mm)
         trace=getattr(getattr(self,'ipc_state',None),'solve_trace',[])
         if trace:
             metrics['constraint_solver']=dict(last=trace[-1],recent_steps=len(trace),
