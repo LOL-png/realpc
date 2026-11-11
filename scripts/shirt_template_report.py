@@ -23,7 +23,7 @@ idx=np.unique(edges);lookup=np.full(len(V),-1,int);lookup[idx]=np.arange(len(idx
 nb,_=connected_components(A,directed=False)
 report={'vertices':len(V),'faces':len(F),'nonmanifold_edges':int((c>2).sum()),'surface_components':len(m.split(only_watertight=False)),'boundary_loops':int(nb),'extent_m':np.ptp(V,axis=0).tolist(),'garment_width_length_m':np.ptp(U,axis=0).tolist(),'flat_rest_metric':info.get('flat_rest',False),'layers':layers,'note':('One sheet, one continuous outline; no sewn second panel. Size inferred from t0.' if layers==1 else 'Four open boundaries: neck, two cuffs, hem. Panels shown separately for inspection; the actual mesh shares sewn boundary vertices. Size is inferred from t0, not independently measured.')}
 if info.get('offline_asset'):
- report.update(offline_asset=info['offline_asset'],asset_sha256=info.get('asset_sha256'),note='Fixed offline garment asset; current-frame registration changes pose only. Consult its build.json for multi-frame evidence and shape-selection limitations. Hidden layers are not reconstructed.')
+ report.update(offline_asset=info['offline_asset'],asset_sha256=info.get('asset_sha256'),note='Fixed offline garment rest asset; current-frame fitting changes pose and deformation while preserving the configured rest metric. Consult its build.json for multi-frame evidence and shape-selection limitations. Hidden layers are not reconstructed.')
 json.dump(report,open(out/'topology.json','w'),indent=2);print(report)
 
 import shutil
