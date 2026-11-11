@@ -13,6 +13,24 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from realpc.dataset import load
+from realpc.scene_pipeline import load_scene_config
+
+
+def verify_cloth_quality(data, metrics, config):
+    """Verify the same current-frame flags used by live inference."""
+    from realpc.cloth_quality import frame_quality
+    count = len(data['ticks'])
+    assert len(metrics) == count
+    assert data['cloth_valid'].shape == (count,)
+    assert data['cloth_approximate'].shape == (count,)
+    assert data['cloth_approximate'].all(), 'Estimated cloth must remain marked approximate'
+    assert np.array_equal(data['cloth_fold_approximate'], data['cloth_approximate'])
+    assert not bool(data['cloth_geometry_observed_only'])
+    for t, metric in enumerate(metrics):
+        assert metric['t'] == t
+        quality = frame_quality(data['cloth_points'][:, t], metric, config)
+        assert quality == metric['quality'], (t, 'saved live quality differs')
+        assert quality['valid'] == bool(data['cloth_valid'][t]), (t, 'saved validity differs')
 
 
 def sha(path):
@@ -36,7 +54,7 @@ def main():
                     if p.stem.split('_')[-1].isdigit())
     if expected != actual:
         raise ValueError(f'Missing: {set(expected)-set(actual)}; unexpected: {set(actual)-set(expected)}')
-    cfg = json.loads(Path(args.config).read_text())
+    cfg = load_scene_config(args.config)
     config_hash = hashlib.sha256(json.dumps(cfg, sort_keys=True).encode()).hexdigest()
     records, implementations, totals = [], {}, {}
     for key in expected:
@@ -67,7 +85,8 @@ def main():
             with np.load(path.with_name(path.stem + '_' + camera + '_masks.npz')) as masks:
                 assert len(masks['labels']) == count and bool(masks['causal']), str(key)
         if key.parts[0] == 'greycloth':
-            assert not data['cloth_valid'][150:].any(), 'Approximate fold accidentally marked valid'
+            metrics = json.loads(path.with_name(path.stem + '_cloth_metrics.json').read_text())
+            verify_cloth_quality(data, metrics, cfg)
         task = totals.setdefault(key.parts[0], dict(episodes=0, frames=0, sam_frames=0, conversion_seconds=0.0))
         task['episodes'] += 1
         task['frames'] += count
@@ -83,7 +102,10 @@ def main():
     from realpc.v4 import SCHEMA
     schema = dict(SCHEMA)
     schema.update(cloth_points='[Nc,T,3] float32, causal deformable clean shirt template',
-                  cloth_fold_approximate='[T] bool; approximate fold geometry excluded from cloth_valid',
+                  cloth_valid='[T] bool; shared current-frame finite/strain/crossing/two-view support gate',
+                  cloth_approximate='[T] bool; true for every estimated template frame, including initialization',
+                  cloth_fold_approximate='[T] bool; legacy alias of cloth_approximate',
+                  cloth_geometry_observed_only='false; hidden material is inferred, not directly measured',
                   cloth_observed='[Nc,T] bool, within 12mm of either current camera depth',
                   config_sha256='SHA256 of canonical shared JSON config',
                   implementation_sha256='SHA256 of source/calibration/library hash mapping')
@@ -101,7 +123,7 @@ def main():
                     converter='realpc.scene_pipeline.ScenePipeline.step (same live/conversion causal step)',
                     causal=True, calibration=dict(file='configs/calib_yam_rig_v3.json',
                         sha256=sha(ROOT / 'configs/calib_yam_rig_v3.json'), const_lag_ticks=3),
-                    object_masks='One shared sparse SAM2 scene stream; depth/flow between refreshes; N10 plus recovery',
+                    object_masks=f"One shared SAM2 scene stream; interval {cfg['segmentation']['interval']} plus recovery; depth/flow between refreshes",
                     library=library, groups={'0':'robot_left', '1':'robot_right', '2':'static', '3':'library object', '4':'cloth'},
                     points_per_episode=dict(robot=9600, object='1500 per library object', static='first-frame voxel cloud', cloth=4000),
                     schema=schema, loader='realpc.dataset.load(npz) -> points [T,N,3], group, obj_id, is_finger, color, valid',
@@ -110,7 +132,7 @@ def main():
                     config_sha256=config_hash, implementations=implementations,
                     notes=['Every episode loaded and valid points checked.',
                            'Job timings include conversion and saving; overlapping jobs are not isolated benchmarks.',
-                           'Cloth folds are approximate and excluded from cloth_valid.',
+                           'All cloth is approximate; validity uses the same current-frame gate as live inference, not a fold timestamp.',
                            'Alignment to propagated masks measures consistency, not independent accuracy.'])
     alignment = root / 'qa/alignment_summary.json'
     if alignment.exists():

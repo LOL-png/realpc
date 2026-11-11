@@ -205,7 +205,7 @@ def main():
             residual = physics['phases'][phase]['max_grasp_residual_mm']
             lines.append(f"| {phase} | {values['top']['depth_med_mm']:.2f}/{values['side']['depth_med_mm']:.2f} | "
                          f"{values['top']['iou']:.3f}/{values['side']['iou']:.3f} | {residual:.1f} |")
-        lines += ['', 'Fold frames are approximate and excluded from the conservative cloth-valid gate.', '']
+        lines += ['', 'All cloth geometry is approximate. Validity is a current-frame support/physical gate; the alignment audit includes invalid frames too.', '']
     (output / 'ALIGNMENT.md').write_text('\n'.join(lines))
 
 
