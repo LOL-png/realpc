@@ -90,6 +90,13 @@ for name in objects:
         item=results[n]['objects'].get(name)
         cells.append(' / '.join(fmt(item['cameras'][c]['mean_iou']) for c in ['top','side']) if item else 'pending')
     lines.append('| '+name+' | '+' | '.join(cells)+' |')
+lines+=['','| Object (depth median mm top / side) | Every1 | Every2 | Every3 | Every10 |','|---|---|---|---|---|']
+for name in objects:
+    cells=[]
+    for n in [1,2,3,10]:
+        item=results[n]['objects'].get(name)
+        cells.append(' / '.join(fmt(item['cameras'][c]['depth_median_mm']) for c in ['top','side']) if item else 'pending')
+    lines.append('| '+name+' | '+' | '.join(cells)+' |')
 lines+=['','| End-to-end fps | Every1 | Every2 | Every3 | Every10 |','|---|---|---|---|---|']
 for task in ['hang','sweep','greycloth']:
     lines.append('| '+task+' | '+' | '.join(fmt(results[n]['tasks'].get(task,{}).get('end_to_end_fps')) for n in [1,2,3,10])+' |')
