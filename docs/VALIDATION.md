@@ -37,6 +37,6 @@ Known rigid weaknesses include a release-time broom error near 587–599 and dus
 - [Selected shirt contact sheet](benchmarks/bounded_cloth_1110/contact_sheet.jpg) and [machine-readable summary](benchmarks/bounded_cloth_1110/summary.json).
 - Full shirt video, per-frame metrics and plots: `/home/howardji/point_tracker/reports/ASTRA_Q30_1110/shirt138/`.
 - Sweep/hang videos: `/home/howardji/point_tracker/reports/SAM_ACCURACY_1110/sweep_n1/` and `hang_n1/`.
-- Earlier evidence: [historical pre-bounded validation](VALIDATION_PRE_BOUNDED_1110.md).
+- Earlier evidence: [historical pre-bounded validation](https://github.com/LOL-png/realpc/blob/archive/experiments-20261111/docs/VALIDATION_PRE_BOUNDED_1110.md).
 
 The release is local only. The 52-episode conversion follows the finalized code, parity checks and delivery of these videos; existing partial data are preserved.

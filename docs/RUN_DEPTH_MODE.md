@@ -18,9 +18,9 @@ python tests/check_scene_live_parity.py \
   --converted /path/to/dataset_v2/task/episode_0000.npz --frames 32 --out parity.json
 ```
 
-The test blocks video/joint recording access inside the live step, compares decoded points and saved masks, and records the actual SAM frame count. Legacy `convert_v4.py --depth-mesh` and cadence scripts remain research ablations only.
+The test blocks video/joint recording access inside the live step, compares decoded points and saved masks, and records the actual SAM frame count. Legacy `convert_v4.py --depth-mesh` and cadence scripts are retained on `archive/experiments-20261111` only.
 
-For a complete collection with bounded local concurrency:
+For the complete release, use the single GPU job in [CLUSTER.md](CLUSTER.md). The generic batch wrapper below is available on a sufficiently provisioned processing host; it is not used on the local monitoring PC:
 
 ```bash
 python scripts/convert_scene_batch.py --episodes-root /path/to/recordings \

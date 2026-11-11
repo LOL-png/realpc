@@ -20,7 +20,7 @@ The shared policy is **SAM every processed frame for every object**. This gave t
 - Cloth: fixed single-sheet rest asset under `assets/cloth/tshirt_candidate132/`, fitted offline using multi-view evidence across the episode. Current frame0 registration fits its pose/wrinkles; topology, rest metric and material sample IDs then persist.
 - Models: SAM2 small and online CoTracker under `.model_cache/`. SAM uses the checkpoint in the shared config; CoTracker defaults to the repo cache (`REALPC_MODEL_CACHE` can override its root). Its checkout is `hub/facebookresearch_co-tracker_main/` and checkpoint is `hub/checkpoints/scaled_online.pth`. Model weights and recordings are not committed.
 
-Install `requirements.txt` and `requirements-cloth.txt`, plus the matching PyTorch/PyTorch3D, Open3D and SAM2 packages. `ffmpeg` must be on PATH. The tested local environment is `/home/howardji/miniconda3/envs/myenv`; its Open3D build needs the system `libstdc++` preload below.
+Install `requirements.txt`, `requirements-cloth.txt` and `requirements-dev.txt` (tests), plus the matching PyTorch/PyTorch3D, Open3D and SAM2 packages. `ffmpeg` must be on PATH. The tested local environment is `/home/howardji/miniconda3/envs/myenv`; its Open3D build needs the system `libstdc++` preload below.
 
 ## Convert recordings
 
