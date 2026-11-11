@@ -88,3 +88,10 @@ metric is incompatible with the first-grasp separation at196 under its selected
 material contacts (distance/geodesic1.123 while both arms remain closed). It is
 rejected. Flat112's corresponding bound is0.977 and does not prove infeasibility.
 Do not use released-grasp frames for this test.
+
+`grasp_init_iters` raises the fitting budget only on a current-frame acquisition
+event. A128-iteration first-acquisition diagnostic resolves the hem-target offset
+to numerical precision while retaining3.72mm mesh residual and the same physical
+checks; it takes19.4s. This avoids treating an initial wrong spatial match as a
+new rest metric. Trial126 tests both acquisitions and the first fold; no success
+is inferred from the one-frame result.
