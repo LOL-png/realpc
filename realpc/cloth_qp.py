@@ -27,19 +27,25 @@ def step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,
         rb=np.zeros((n,3));np.add.at(rb,ids,np.einsum('nij,nj->ni',blocks,origins));rb=rb.ravel();H+=ray_H;g+=ray_H@X.ravel()-rb
     # Soft goal plus a bounded hard incremental contact step. The latter may be
     # infeasible; solver failure retains the previous accepted mesh explicitly.
-    pi=np.asarray(pi,int);pt=np.asarray(pt).reshape(-1,3);pin_dof=(pi[:,None]*3+np.arange(3)).ravel()
+    pi=np.asarray(pi,int);pt=np.asarray(pt).reshape(-1,3).copy();raw_pt=pt.copy()
+    if table_plane is not None and len(pi):
+        normal=np.r_[-table_plane[:2],1.];height=pt@normal-table_plane[2]-.00025
+        pt+=np.maximum(-height,0)[:,None]*normal/(normal@normal)
+    pin_dof=(pi[:,None]*3+np.arange(3)).ravel()
     goal=(pt-X[pi]);goal*=np.minimum(1,max_step/np.maximum(np.linalg.norm(goal,axis=1),1e-12))[:,None]
     pin_weight=5e5;diag=np.zeros(3*n);diag[pin_dof]=pin_weight;H+=sp.diags(diag);g[pin_dof]+=pin_weight*(X[pi]-pt).ravel()
     constraints=[J,sp.eye(3*n,format='csr')]
     # Reserve some upper-length margin for curvature (norm linearization is a
     # lower bound). Lower linear bounds imply exact lower bounds along the step.
-    low=[rest*(1-max_stretch)-length,np.full(3*n,-max_step)]
+    # Solve inside the acceptance bounds: an absolute QP residual of 1e-7 m
+    # can otherwise sit outside an exact edge-ratio/table check indefinitely.
+    low=[rest*(1-max_stretch*.9)-length,np.full(3*n,-max_step)]
     high=[rest*(1+max_stretch*.5)-length,np.full(3*n,max_step)]
     if len(pi):
         selector=sp.coo_matrix((np.ones(len(pin_dof)),(np.arange(len(pin_dof)),pin_dof)),shape=(len(pin_dof),3*n)).tocsr()
         constraints.append(selector);low.append(goal.ravel());high.append(goal.ravel())
     if table_plane is not None:
-        normal=np.r_[-table_plane[:2],1.];height=X@normal-table_plane[2]-.0002
+        normal=np.r_[-table_plane[:2],1.];height=X@normal-table_plane[2]-.00025
         C=sp.coo_matrix((np.tile(normal,n),(np.repeat(np.arange(n),3),np.arange(3*n))),shape=(n,3*n)).tocsr()
         constraints.append(C);low.append(-height);high.append(np.full(n,np.inf))
     cs=contact.ipc.NormalCollisions();cs.build(contact.mesh,X,.001,dmin=0,broad_phase=contact.broad_phase)
@@ -57,7 +63,8 @@ def step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,
     solved=solver.solve();info=dict(qp_status=solved.info.status,qp_iterations=int(solved.info.iter),qp_primal_residual=float(solved.info.prim_res))
     result=X.copy()
     if solved.info.status_val in (1,2):
-        candidate=X+solved.x.reshape(n,3);candidate,_=extension_filter(X,candidate,V0,E,max_stretch);candidate=contact.filter(X,candidate)
+        candidate=X+solved.x.reshape(n,3);candidate,edge_alpha=extension_filter(X,candidate,V0,E,max_stretch);candidate=contact.filter(X,candidate)
+        info.update(edge_alpha=float(edge_alpha),ccd_alpha=float(contact.last_alpha))
         def energy(Y):
             ratios=np.linalg.norm(Y[E[:,0]]-Y[E[:,1]],axis=1)/rest
             if ratios.min()<1-max_stretch-1e-8 or ratios.max()>1+max_stretch+1e-8:return np.inf
@@ -68,10 +75,12 @@ def step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,
             if ray_H is not None:value+=.5*Y.ravel()@(ray_H@Y.ravel())-rb@Y.ravel()
             return float(value)
         old=energy(X)
-        for _ in range(12):
+        for halves in range(12):
             if energy(candidate)<=old+1e-9:result=candidate;break
             candidate=(X+candidate)*.5
+        info['line_halves']=halves
     info.update(max_accepted_mm=float(np.max(np.linalg.norm(result-X,axis=1)))*1000,hard_error_mm=float(np.max(np.linalg.norm(result[pi]-pt,axis=1)))*1000 if len(pi) else 0.)
+    info['raw_grasp_error_mm']=float(np.max(np.linalg.norm(result[pi]-raw_pt,axis=1)))*1000 if len(pi) else 0.
     if not hasattr(contact,'solve_trace'):contact.solve_trace=[]
     contact.solve_trace.append(info);contact.solve_trace=contact.solve_trace[-100:]
     return result

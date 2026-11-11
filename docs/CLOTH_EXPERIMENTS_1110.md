@@ -72,3 +72,19 @@ rest/sample IDs, ±2% accepted-state edge bounds, no endpoint crossings, and pac
 ordering on a three-frame prefix. This is a software/constraint test, **not** a
 full-fold accuracy test. Full failures and candidate comparisons are recorded in
 `~/point_tracker/plans/ASTRA_Q30_CLOTH_LOG_1109.md`; no candidate is promoted yet.
+
+## Numerical pickup regression
+The initial QP could repeatedly solve but accept no movement because solver
+residuals exceeded the stricter geometric acceptance tolerance. Inner lower-edge
+and table margins fix that recorded stall; below-table effective contact goals
+are projected to the table, while raw FK residuals remain reported.
+`tests/check_cloth_qp_regression.py` checks deterministic current-packet replay,
+actual progress, immutable material coordinates, strain bounds and crossings
+on a trusted held-state checkpoint. This is not a whole-fold quality claim.
+
+Full strict control120 satisfies ±2% edge bounds and has zero endpoint crossings
+on453frames but worsens first-fold camera alignment. Candidate117's nonflat rest
+metric is incompatible with the first-grasp separation at196 under its selected
+material contacts (distance/geodesic1.123 while both arms remain closed). It is
+rejected. Flat112's corresponding bound is0.977 and does not prove infeasibility.
+Do not use released-grasp frames for this test.
