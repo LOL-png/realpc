@@ -702,7 +702,8 @@ class CausalClothTracker:
         trace=getattr(getattr(self,'ipc_state',None),'solve_trace',[])
         if trace:
             metrics['constraint_solver']=dict(last=trace[-1],recent_steps=len(trace),
-                recent_moving_steps=sum(r['max_accepted_mm']>1e-5 for r in trace))
+                recent_moving_steps=sum(r['max_accepted_mm']>1e-5 for r in trace),
+                relaxed_pin_steps=sum(bool(r.get('pin_equality_relaxed',False)) for r in trace))
         if self.table_contact:metrics['min_table_clearance_mm']=float((X@np.r_[-self.table_plane[:2],1.]-self.table_plane[2]).min()*1000)
         metrics['global_slide']=recovery
         metrics['idle_gate']=idle;metrics['pins']=len(pi);metrics['ipc_intersections']=self.ipc_state.intersects(X) if self.ipc_contact else None;metrics['ipc_contacts']=self.ipc_state.last_contacts if self.ipc_contact else None;metrics['ipc_alpha']=self.ipc_state.last_alpha if self.ipc_contact else None;metrics['grasp_error_mm']=float(np.max(np.linalg.norm(X[pi]-pt,axis=1))*1000) if len(pi) else 0.;metrics['hard_grasp_error_mm']=float(np.max(np.linalg.norm(X[hi]-ht,axis=1))*1000) if len(hi) else 0.;self.prev_views=v

@@ -25,6 +25,8 @@ for repeat in range(2):
     assert not m['ipc_intersections']
     assert np.array_equal(rest,tr.cm.V0) and np.array_equal(sf,tr.cm.sf) and np.array_equal(sb,tr.cm.sb)
     results.append(x.copy())
-    print('PASS repeat',repeat,'frame',t,'raw grasp mm',m['grasp_error_mm'],'edge ratio',ratio.min(),ratio.max())
+    print('PASS repeat',repeat,'frame',t,'contact center mm',m['hard_grasp_error_mm'],
+          'soft patch mm',m['grasp_error_mm'],'edge ratio',ratio.min(),ratio.max(),
+          'relaxed pin steps',sum(bool(r.get('pin_equality_relaxed',False)) for r in trace))
 assert np.allclose(results[0],results[1],rtol=0,atol=1e-10)
 print('PASS deterministic current-packet replay, nonzero constrained progress, immutable asset and physical bounds')

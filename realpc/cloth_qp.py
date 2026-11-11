@@ -62,6 +62,17 @@ def step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,
     if conic:
         from .cloth_conic import solve
         direction,info,ok=solve(H,g,C,lo,hi,X,E,rest,max_stretch)
+        if not ok and len(pi):
+            # A prescribed straight incremental grip displacement can conflict
+            # with a nearby fold even when a smaller/tangential move is legal.
+            # Retain the strong grip objective and ALL physical constraints;
+            # remove only the pin equality, then measure the actual residual.
+            original_status=info['qp_status']
+            keep=np.ones(C.shape[0],bool)
+            start=len(E)+3*n
+            keep[start:start+len(pin_dof)]=False
+            direction,info,ok=solve(H,g,C[keep],lo[keep],hi[keep],X,E,rest,max_stretch)
+            info.update(pin_equality_relaxed=True,original_pin_status=original_status)
     else:
         solver=osqp.OSQP();solver.setup(P=sp.triu(H/scale,format='csc'),q=g/scale,A=C,l=lo,u=hi,verbose=False,eps_abs=1e-7,eps_rel=1e-5,max_iter=6000,polishing=True)
         solved=solver.solve();direction=solved.x;ok=solved.info.status_val in (1,2)
