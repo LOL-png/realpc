@@ -15,6 +15,41 @@ def outline():
                      [-.34,.38],[-.62,.16],[-.49,-.06],[-.37,.00]])
 
 
+def register_asset(views,path,table_plane=None):
+    """Rigidly register a fixed offline pattern using only the current views.
+    No shape rescaling or saved episode poses enter runtime initialization.
+    Start isometrically flat; the constrained tracker supplies the drape.
+    """
+    import hashlib
+    from pathlib import Path as FilePath
+    with np.load(path) as z:
+        V=z['V'].copy();F=z['F'].copy();poly=z['outline'].copy();pair=z['panel_pair'].copy();layers=int(z['layers'])
+        landmark_ids=z['landmark_ids'].copy() if 'landmark_ids' in z else None
+        nonflat=bool(z['canonical_nonflat']) if 'canonical_nonflat' in z else False
+    top=views['top']['P'];center=np.median(top[:,:2],axis=0)
+    import cv2
+    step=.004;origin=top[:,:2].min(0)-.02;idx=np.rint((top[:,:2]-origin)/step).astype(int)
+    mask=np.zeros(tuple(idx.max(0)+5),np.uint8);mask[idx[:,0],idx[:,1]]=1
+    mask=cv2.morphologyEx(mask,cv2.MORPH_CLOSE,np.ones((5,5),np.uint8))
+    cc,_=cv2.findContours(mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
+    contour=max(cc,key=cv2.contourArea)[:,0,::-1]*step+origin;tree=cKDTree(contour)
+    samples=np.vstack([a+(b-a)*np.linspace(0,1,15)[:,None] for a,b in zip(poly,np.roll(poly,-1,axis=0))])
+    def transform(p,xy):
+        c,s=np.cos(p[0]),np.sin(p[0]);return xy@np.array([[c,s],[-s,c]])+p[1:]
+    def residual(p):
+        line=transform(p,samples);return np.r_[tree.query(line)[0],cKDTree(line).query(contour[::3])[0]]
+    fits=[least_squares(residual,[angle,*center],bounds=([angle-.7,*(center-.15)],[angle+.7,*(center+.15)]),loss='soft_l1',f_scale=.01,max_nfev=60) for angle in [-np.pi/2,np.pi/2,0,np.pi]]
+    fit=min(fits,key=lambda f:np.mean(residual(f.x)**2));angle=fit.x[0]
+    plane=np.array([0.,0.,np.percentile(top[:,2],2)-.003]) if table_plane is None else np.asarray(table_plane)
+    normal=np.r_[-plane[:2],1.];normal/=np.linalg.norm(normal)
+    ex=np.array([np.cos(angle),np.sin(angle),0.]);ex-=normal*np.dot(ex,normal);ex/=np.linalg.norm(ex);ey=np.cross(normal,ex)
+    center3=np.r_[fit.x[1:],np.dot(plane[:2],fit.x[1:])+plane[2]+.002]
+    V=V[:,0,None]*ex+V[:,1,None]*ey+V[:,2,None]*normal+center3
+    p3=poly[:,0,None]*ex+poly[:,1,None]*ey+center3
+    if landmark_ids is None:landmark_ids=cKDTree(V).query(p3[[0,1,3,4,6,10,12,13]])[1]
+    return V,F,V.copy(),dict(layers=layers,panel_vertices=len(V),panel_pair=pair.tolist(),fit_parameters=[angle,1.,1.,*fit.x[1:]],fit_outline=p3[:,:2].tolist(),initial_landmark_ids=landmark_ids.tolist(),flat_rest=not nonflat,canonical_nonflat=nonflat,current_frame_only=True,offline_asset=str(path),asset_sha256=hashlib.sha256(FilePath(path).read_bytes()).hexdigest(),rigid_registration_only=True)
+
+
 def make_panels(poly,cell=.012,thickness=.002,layers=2):
     if layers not in (1,2):raise ValueError('shirt layers must be 1 or 2')
     boundary=[];seams=[]

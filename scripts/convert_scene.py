@@ -38,8 +38,11 @@ def convert_episode(ep_path, out_root, config, assets, calibration, stop=None, s
     config_hash = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
     count = min(len(ep.low['t_cap']), stop or len(ep.low['t_cap']))
     sources = [Path(__file__), Path(calibration), *sorted((ROOT / 'realpc').glob('*.py')),
+               *sorted((ROOT / 'realpc').glob('cloth*.cpp')),
                *sorted((assets / ep.task).glob('*.ply')), *sorted((assets / ep.task).glob('*.json')),
                *sorted((assets / ep.task).glob('*.npz'))]
+    if config.get('cloth',{}).get('shirt_asset'):
+        sources.append(Path(config['cloth']['shirt_asset']))
     source_hashes = {str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
     implementation_hash = hashlib.sha256(json.dumps(source_hashes,sort_keys=True).encode()).hexdigest()
     if skip and output.exists() and qa_path.exists():

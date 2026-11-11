@@ -44,7 +44,13 @@ class CausalClothTracker:
         keys=inspect.signature(cls).parameters
         return cls(**{k:v for k,v in config.items() if k in keys})
 
-    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False, landmark_grasp=False, init_landmarks=False, native_init_gain=None, shirt_layers=2, init_registration_iters=0, init_registration_strain=50., init_registration_arap=.2, init_registration_data=8., init_registration_coverage=20., init_registration_bending=.2, init_registration_contour=80., init_registration_focus=1., feasible_predict=False, contact_clearance=0., contact_stiffness=1e9):
+    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False, landmark_grasp=False, init_landmarks=False, native_init_gain=None, shirt_layers=2, init_registration_iters=0, init_registration_strain=50., init_registration_arap=.2, init_registration_data=8., init_registration_coverage=20., init_registration_bending=.2, init_registration_contour=80., init_registration_focus=1., feasible_predict=False, contact_clearance=0., contact_stiffness=1e9, shirt_asset=None, global_slide=False, contact_projection=False, constraint_restore=False, compression_soft=False, held_iters=0):
+        self.held_iters=held_iters
+        self.compression_soft=compression_soft
+        self.constraint_restore=constraint_restore
+        self.contact_projection=contact_projection
+        self.global_slide=global_slide
+        self.shirt_asset=shirt_asset
         self.contact_stiffness=contact_stiffness
         self.contact_clearance=contact_clearance
         self.feasible_predict=feasible_predict
@@ -59,6 +65,15 @@ class CausalClothTracker:
         state=self.__dict__.copy()
         for k in ('projection_solve','projection_coupling','projection_key','ipc_state'):state.pop(k,None)
         return state
+
+    def __setstate__(self,state):
+        self.__dict__.update(state)
+        # Trusted local experiment checkpoints from earlier tracker versions.
+        # Never replace their rest metric or material/sample identities.
+        for key,value in dict(shirt_asset=None,global_slide=False,
+                contact_projection=False,constraint_restore=False,
+                compression_soft=False,held_iters=0).items():
+            self.__dict__.setdefault(key,value)
 
     def cot_constraints(self,f,v,X):
         ids=[];targets=[];weights=[];self.cot_checks=[];self.ray_observations=[]
@@ -146,8 +161,13 @@ class CausalClothTracker:
         vv=[(v[c]['D'],v[c]['K'],v[c]['T'],1.,v[c]['P']) for c in ('top','side')]
         initial_X=None
         if self.template=='shirt':
-            from .shirt_template import fit_current
-            V,F,initial_X,self.template_info=fit_current(v,self.cell,flat_rest=self.flat_rest,table_plane=getattr(self,'table_plane',None),back_on_table=self.back_on_table,layers=self.shirt_layers,flexible=bool(getattr(self,"init_registration_iters",0)))
+            from .shirt_template import fit_current,register_asset
+            if self.shirt_asset:
+                if self.material_slack!=1 or self.length_slack!=1 or not self.flat_rest:raise ValueError('A fixed asset requires flat_rest and unit material/length scales')
+                V,F,initial_X,self.template_info=register_asset(v,self.shirt_asset,getattr(self,'table_plane',None))
+                if self.template_info['layers']!=self.shirt_layers:raise ValueError('Asset layer count mismatch')
+            else:
+                V,F,initial_X,self.template_info=fit_current(v,self.cell,flat_rest=self.flat_rest,table_plane=getattr(self,'table_plane',None),back_on_table=self.back_on_table,layers=self.shirt_layers,flexible=bool(getattr(self,"init_registration_iters",0)))
         elif self.template=='top':
             # A single observed cloth skin avoids TSDF welding nearby initial
             # wrinkle layers. Hidden cloth is still an approximation, not GT.
@@ -179,6 +199,22 @@ class CausalClothTracker:
             self.template_info['material_length_scale']=self.length_slack
         self.cm=ClothMesh(V,F,n_samples=8000)
         if initial_X is not None:self.cm.X=initial_X
+        if self.shirt_asset and self.max_stretch and not self.template_info.get('canonical_nonflat',False):
+            from .cloth_physics import project_extension_endpoint,metric_endpoint_filter,IPCContact
+            # Current-depth drape seed, projected to the fixed asset's metric.
+            # Starting flat otherwise makes the first Newton directions struggle
+            # to create a finite bend without consuming an edge-length bound.
+            target=V.copy();distance,j=cKDTree(P[:,:2]).query(V[:,:2],k=12)
+            w=np.exp(-(distance/.025)**2);target[:,2]=(w*P[j,2]).sum(1)/np.maximum(w.sum(1),1e-20)
+            target[w.sum(1)<1e-8]=V[w.sum(1)<1e-8]
+            target=project_extension_endpoint(target,V,self.cm.E,limit=.002,sweeps=2400,two_sided=True)
+            if self.table_contact:
+                normal=np.r_[-self.table_plane[:2],1.];height=target@normal-self.table_plane[2]
+                target+=max(0.,.0003-float(height.min()))*normal/(normal@normal)
+            target,_=metric_endpoint_filter(V,target,V,self.cm.E,self.max_stretch)
+            guard=IPCContact(V,self.cm.E,F,stiffness=self.contact_stiffness)
+            initial_X=guard.filter(V,target);self.cm.X=initial_X
+            self.template_info['constrained_current_depth_seed']=True
         if initial_X is not None and getattr(self,'contact_clearance',0):
             import ipctk
             ipctk.set_num_threads(1)
@@ -187,7 +223,9 @@ class CausalClothTracker:
             while True:
                 trial=V+alpha*(initial_X-V)
                 cs=ipctk.NormalCollisions();cs.build(collision,trial,max(.002,self.contact_clearance*2))
-                if not ipctk.has_intersections(collision,trial) and cs.compute_minimum_distance(collision,trial)>(self.contact_clearance*1.2)**2:break
+                ratio=np.linalg.norm(trial[self.cm.E[:,0]]-trial[self.cm.E[:,1]],axis=1)/np.linalg.norm(V[self.cm.E[:,0]]-V[self.cm.E[:,1]],axis=1)
+                metric_ok=not (self.shirt_asset and self.max_stretch) or np.max(abs(ratio-1))<self.max_stretch
+                if metric_ok and not ipctk.has_intersections(collision,trial) and cs.compute_minimum_distance(collision,trial)>(self.contact_clearance*1.2)**2:break
                 alpha*=.8
                 if alpha<1e-5:raise ValueError('Clean template cannot satisfy contact clearance')
             if self.table_contact:
@@ -375,7 +413,10 @@ class CausalClothTracker:
         self.wa=self.init_registration_arap;self.wd=self.init_registration_data
         self.coverage=self.init_registration_coverage;self.bending=self.init_registration_bending
         self.strain_stiffness=self.init_registration_strain;self.init_iters=self.init_registration_iters
-        self.max_stretch=0.;self.dynamics=False
+        # A calibrated asset must enter tracking inside the SAME metric bounds;
+        # relaxing initialization would make the next feasibility step invalid.
+        if not self.shirt_asset:self.max_stretch=0.
+        self.dynamics=False
         try:
             result=self._step(t,frame,iters=self.init_registration_iters)
             result[1]['initial_registration']=dict(iterations=self.init_registration_iters,
@@ -402,6 +443,7 @@ class CausalClothTracker:
             self.ipc_state=IPCContact(X,E,self.cm.F,min_distance=getattr(self,"contact_clearance",0.),stiffness=getattr(self,"contact_stiffness",1e9))
         pi,pt=self.update_pins(frame,X,v)
         hi,ht=pi,pt
+        if len(pi):iters=max(iters,self.held_iters)
         if self.template=='shirt' and self.point_grasp and len(pi):
             hard=[]
             for arm,(ids,_) in self.pins.items():
@@ -432,7 +474,12 @@ class CausalClothTracker:
             tips=np.vstack([frame['tips_left'],frame['tips_right']]);near=cKDTree(X).query(tips)[0].min()
             residual=float(np.median(np.linalg.norm(tt-X[ti],axis=1)))
             velocity=float(np.median(np.linalg.norm(Xp-self.prev_X,axis=1))) if self.prev_X is not None else 0.
-            idle=bool(residual<.004 and velocity<.002)
+            # Local matches can survive on a tiny overlap after global tracking
+            # fails. Require observed surface coverage in BOTH current views.
+            surface=self.cm.samples(X)
+            tree=cKDTree(surface)
+            agreement=[float(np.mean(tree.query(v[c]['P'])[0]<.012)) for c in ('top','side')]
+            idle=bool(residual<.004 and velocity<.002 and min(agreement)>.9)
         if idle:iters=0
         if not idle and self.predict and self.prev_X is not None:
             velocity=.8*(Xp-self.prev_X);length=np.linalg.norm(velocity,axis=1);velocity*=np.minimum(1,.025*self.motion_scale/np.maximum(length,1e-8))[:,None]
@@ -461,12 +508,22 @@ class CausalClothTracker:
                 normal=np.r_[-self.table_plane[:2],1.];height=candidate@normal-self.table_plane[2]-.0002
                 candidate+=np.maximum(-height,0)[:,None]*normal/(normal@normal)
             if self.max_stretch:
-                from .cloth_physics import extension_filter
-                candidate,_=extension_filter(Xp,candidate,self.cm.V0,E,self.max_stretch)
+                from .cloth_physics import extension_filter,metric_endpoint_filter,project_extension_endpoint
+                if self.shirt_asset:
+                    candidate=project_extension_endpoint(candidate,self.cm.V0,E,limit=self.max_stretch*.1,two_sided=True)
+                candidate,_=(metric_endpoint_filter if self.shirt_asset and not self.compression_soft else extension_filter)(Xp,candidate,self.cm.V0,E,self.max_stretch)
             # Use coherent FK/material motion as a collision-filtered warm start.
             # Previously only a weak .15-weight objective retained this motion.
             X=self.ipc_state.filter(Xp,candidate)
+            if self.shirt_asset and self.max_stretch:
+                ratio=np.linalg.norm(X[E[:,0]]-X[E[:,1]],axis=1)/np.linalg.norm(self.e0,axis=1)
+                if (ratio.max()-1 if self.compression_soft else np.max(abs(ratio-1)))>self.max_stretch+1e-10:X=Xp.copy()
 
+        recovery=dict(applied=False)
+        if self.global_slide and t>0 and not idle:
+            from .cloth_recovery import translate_sheet
+            recovered,recovery=translate_sheet(X,v,getattr(self,'table_plane',None),hi,ht)
+            prior+=recovered-X;X=recovered
         cams=CAMS if self.wrists else CAMS[:2];trees={c:cKDTree(v[c]['P']) for c in cams if len(v[c]['P'])}
         registration_contour=None
         if t==0 and getattr(self,'init_registration_iters',0) and self.init_registration_contour:
@@ -555,7 +612,7 @@ class CausalClothTracker:
                 if self.cot_rays_only and self.ray_observations:
                     ri,off,centers,dirs,rw=[np.concatenate([obs[j] for obs in self.ray_observations]) for j in range(5)]
                     rays=(ri,centers-np.einsum('nij,nj->ni',R[ri],off),dirs,rw)
-                X=joint_step(X,self.cm.V0,E,A,rhs,hi,ht,self.strain_limit,self.strain_stiffness,self.ipc_state if self.ipc_contact else None,self.max_stretch,self.endpoint_projection,rays=rays,table_plane=getattr(self,'table_plane',None))
+                X=joint_step(X,self.cm.V0,E,A,rhs,hi,ht,self.strain_limit,self.strain_stiffness,self.ipc_state if self.ipc_contact else None,self.max_stretch,self.endpoint_projection,rays=rays,table_plane=getattr(self,'table_plane',None),metric_bounds=bool(self.shirt_asset),contact_projection=self.contact_projection,constraint_restore=self.constraint_restore,compression_soft=self.compression_soft)
             else:X=sla.spsolve(A.tocsc(),rhs)
             if self.strain_limit and not self.joint_physics and not self.dynamics:X=self.project_strain(X,hi,ht)
             if self.template=='shirt' and not self.ipc_contact and not self.dynamics:
@@ -577,6 +634,7 @@ class CausalClothTracker:
             if self.cot_weight:self.cot_constraints(frame,v,X)
         metrics=self.measure(v,checks,counts)
         if self.table_contact:metrics['min_table_clearance_mm']=float((X@np.r_[-self.table_plane[:2],1.]-self.table_plane[2]).min()*1000)
+        metrics['global_slide']=recovery
         metrics['idle_gate']=idle;metrics['pins']=len(pi);metrics['ipc_intersections']=self.ipc_state.intersects(X) if self.ipc_contact else None;metrics['ipc_contacts']=self.ipc_state.last_contacts if self.ipc_contact else None;metrics['ipc_alpha']=self.ipc_state.last_alpha if self.ipc_contact else None;metrics['grasp_error_mm']=float(np.max(np.linalg.norm(X[pi]-pt,axis=1))*1000) if len(pi) else 0.;metrics['hard_grasp_error_mm']=float(np.max(np.linalg.norm(X[hi]-ht,axis=1))*1000) if len(hi) else 0.;self.prev_views=v
         if self.dense:metrics['vertex_flow_constraints']=len(vi)
         # Initialization is registration, not an observed time interval. Do not

@@ -70,7 +70,7 @@ def visible_vertices(X,F,K,T,shape):
     visible=np.zeros(len(X),bool);visible[vi]=True;return visible
 
 
-def joint_step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,max_stretch=0.,endpoint_projection=False,rays=None,table_plane=None):
+def joint_step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,max_stretch=0.,endpoint_projection=False,rays=None,table_plane=None,metric_bounds=False,contact_projection=False,constraint_restore=False,compression_soft=False):
     """One sparse Gauss-Newton step jointly fitting observations and edge strain.
     Fixed contact centers are eliminated; all other contact targets remain soft.
     """
@@ -129,18 +129,40 @@ def joint_step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,max_stre
             delta[free]=sol[:len(free)]
     delta=delta.reshape(-1,3);norm=np.linalg.norm(delta,axis=1);raw_max=float(norm.max());clip_scale=min(1.,.025/max(raw_max,1e-12));delta*=clip_scale
     result=X+delta
-    if endpoint_projection and max_stretch:result=project_extension_endpoint(result,V0,E,pi,limit=max_stretch*.1)
+    if endpoint_projection and max_stretch:result=project_extension_endpoint(result,V0,E,pi,limit=max_stretch*.1,two_sided=metric_bounds)
+    if metric_bounds and contact is not None and contact_projection:
+        # A few nearly touching cuff vertices must not throttle the whole sheet.
+        # Alternate local separation directions with the material projection;
+        # final metric checks and continuous CCD still decide acceptance.
+        for _ in range(3):
+            result=contact.project_candidate(X,result,pi)
+            result=project_extension_endpoint(result,V0,E,pi,limit=max_stretch*.1,two_sided=True)
     if table_plane is not None:
         normal=np.r_[-table_plane[:2],1.];height=result@normal-table_plane[2]-.0002
         result+=np.maximum(-height,0)[:,None]*normal/(normal@normal)
         # Both endpoints now lie in a convex supporting half-space; shortening
         # this update for strain/CCD keeps it above the measured tilted table.
-    if max_stretch:result,_=extension_filter(X,result,V0,E,max_stretch)
+    proposal_ratio=np.linalg.norm(result[E[:,0]]-result[E[:,1]],axis=1)/rest if len(E) else np.ones(1)
+    metric_alpha=1.
+    if max_stretch:result,metric_alpha=(metric_endpoint_filter if metric_bounds and not compression_soft else extension_filter)(X,result,V0,E,max_stretch)
     if contact is not None:result=contact.filter(X,result)
+    if constraint_restore and metric_bounds and contact is not None:
+        # CCD can shorten an isometric bend into a compressed intermediate
+        # state. Restore the metric along additional collision-checked segments;
+        # do not then linearly interpolate across that nonlinear path.
+        for _ in range(4):
+            ratio=np.linalg.norm(result[E[:,0]]-result[E[:,1]],axis=1)/rest
+            if np.max(abs(ratio-1))<max_stretch-1e-5:break
+            restored=project_extension_endpoint(result,V0,E,pi,limit=max_stretch*.1,two_sided=True)
+            if table_plane is not None:
+                normal=np.r_[-table_plane[:2],1.];height=restored@normal-table_plane[2]-.0002
+                restored+=np.maximum(-height,0)[:,None]*normal/(normal@normal)
+            result=contact.filter(result,restored)
     direction=result-X
     def energy(Y):
         if contact is not None and contact.intersects(Y):return np.inf
         ll=np.linalg.norm(Y[E[:,0]]-Y[E[:,1]],axis=1);rr=ll-np.clip(ll,rest*(1-band),rest*(1+band))
+        if metric_bounds and ((not compression_soft and np.min(ll/rest)<1-max_stretch-1e-10) or np.max(ll/rest)>1+max_stretch+1e-10):return np.inf
         value=.5*np.sum(Y*(A@Y))-np.sum(rhs*Y)+.5*np.sum(weights*rr*rr)
         if ray_H is not None:value+=.5*Y.ravel()@(ray_H@Y.ravel())-ray_rhs@Y.ravel()
         if len(pi):value+=5e5*np.sum((Y[pi]-effective_pt)**2)
@@ -151,12 +173,16 @@ def joint_step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,max_stre
         if contact is not None:value+=contact.energy(Y)
         return value
     before=energy(X)
-    for line_steps in range(16):
-        if energy(result)<=before+1e-10:break
-        direction*=.5;result=X+direction
-    else:result=X.copy()
+    if constraint_restore and metric_bounds and contact is not None:
+        line_steps=0
+        if energy(result)>before+1e-10:result=X.copy();line_steps=16
+    else:
+        for line_steps in range(16):
+            if energy(result)<=before+1e-10:break
+            direction*=.5;result=X+direction
+        else:result=X.copy()
     if contact is not None:
-        contact.last_solve=dict(raw_max_delta_mm=raw_max*1000,clip_scale=clip_scale,ccd_alpha=contact.last_alpha,line_halvings=line_steps,energy_before=float(before),energy_after=float(energy(result)),max_accepted_mm=float(np.linalg.norm(result-X,axis=1).max()*1000),hard_error_mm=float(np.linalg.norm(result[pi]-effective_pt,axis=1).max()*1000) if len(pi) else 0.)
+        contact.last_solve=dict(raw_max_delta_mm=raw_max*1000,clip_scale=clip_scale,metric_alpha=metric_alpha,proposal_min_ratio=float(proposal_ratio.min()),proposal_max_ratio=float(proposal_ratio.max()),ccd_alpha=contact.last_alpha,line_halvings=line_steps,energy_before=float(before),energy_after=float(energy(result)),max_accepted_mm=float(np.linalg.norm(result-X,axis=1).max()*1000),hard_error_mm=float(np.linalg.norm(result[pi]-effective_pt,axis=1).max()*1000) if len(pi) else 0.)
         if not hasattr(contact,'solve_trace'):contact.solve_trace=[]
         contact.solve_trace.append(contact.last_solve);contact.solve_trace=contact.solve_trace[-100:]
     return result
@@ -182,19 +208,47 @@ class IPCContact:
         g=self.barrier.gradient(cs,self.mesh,X);H=self.barrier.hessian(cs,self.mesh,X,self.ipc.PSDProjectionMethod.CLAMP)
         return g,H
     def filter(self,X,Y):
-        alpha=float(self.ipc.compute_collision_free_stepsize(self.mesh,X,Y,min_distance=self.min_distance,broad_phase=self.broad_phase,narrow_phase_ccd=self.ccd))
+        # The barrier/accepted endpoint clearance is stricter than CCD's guard.
+        # Using exactly the same distance lets roundoff classify a valid start
+        # as already touching, returning zero even for a tangential slide.
+        guard=.5*self.min_distance
+        alpha=float(self.ipc.compute_collision_free_stepsize(self.mesh,X,Y,min_distance=guard,broad_phase=self.broad_phase,narrow_phase_ccd=self.ccd))
         scale=min(1.,.9*alpha if alpha<1 else 1.)
         candidate=X+scale*(Y-X);self.endpoint_backtracks=0
         # Additive CCD warns that machine-scale gaps can miss a collision.
         # Never accept an intersecting endpoint merely because its TOI passed.
-        while self.intersects(candidate) and self.endpoint_backtracks<24:
+        def invalid(q):
+            if self.intersects(q):return True
+            if not self.min_distance:return False
+            cs=self.ipc.NormalCollisions();cs.build(self.mesh,q,self.dhat,dmin=0,broad_phase=self.broad_phase)
+            return cs.compute_minimum_distance(self.mesh,q)<(self.min_distance*1.0001)**2
+        while invalid(candidate) and self.endpoint_backtracks<24:
             scale*=.5;candidate=X+scale*(Y-X);self.endpoint_backtracks+=1
-        if self.intersects(candidate):candidate=X.copy();scale=0.
+        if invalid(candidate):candidate=X.copy();scale=0.
         self.last_alpha=scale
         return candidate
     def energy(self,X):
         cs=self.ipc.NormalCollisions();cs.build(self.mesh,X,self.dhat,dmin=self.min_distance,broad_phase=self.broad_phase)
         return float(self.barrier(cs,self.mesh,X))
+    def project_candidate(self,X,Y,fixed=()):
+        cs=self.ipc.NormalCollisions();cs.build(self.mesh,X,.001,dmin=0,broad_phase=self.broad_phase)
+        Y=Y.copy();inv=np.ones(len(X));inv[np.asarray(fixed,int)]=0
+        # __getitem__ in the installed binding returns an owning wrapper around
+        # an element owned by cs (double free on destruction). Typed list access
+        # returns copied values and survives repeated calls.
+        for c in cs.vv_collisions+cs.ev_collisions+cs.ee_collisions+cs.fv_collisions:
+            dof=c.dof(X,self.mesh.edges,self.mesh.faces)
+            gap=np.sqrt(max(0.,c.compute_distance(dof)))
+            if gap>.0005:continue
+            ids=np.asarray(c.vertex_ids(self.mesh.edges,self.mesh.faces));ids=ids[ids>=0]
+            grad=np.asarray(c.compute_distance_gradient(dof)).reshape(-1,3)
+            norm=np.linalg.norm(grad)
+            if norm<1e-20:continue
+            grad/=norm;change=float(np.sum(grad*(Y[ids]-X[ids])))
+            target=max(0.,max(.00015,self.min_distance*1.2)-gap)
+            den=float(np.sum(inv[ids,None]*grad**2))
+            if change<target and den>1e-12:Y[ids]+=(target-change)/den*inv[ids,None]*grad
+        return Y
     def intersects(self,X):return bool(self.ipc.has_intersections(self.mesh,X,broad_phase=self.broad_phase))
 
 
@@ -210,7 +264,35 @@ def extension_filter(X,Y,V0,E,limit=.02):
 
 
 _EDGE_COLORS={}
-def project_extension_endpoint(Y,V0,E,fixed=(),limit=.002,sweeps=80):
+def metric_endpoint_filter(X,Y,V0,E,limit=.02):
+    """Bound accepted mesh states. Straight vertex interpolation is not an
+    isometric bending path, so lower bounds are checked at accepted endpoints.
+    Continuous collision checking remains separate and mandatory.
+    """
+    Z,alpha=extension_filter(X,Y,V0,E,limit)
+    rest=np.linalg.norm(V0[E[:,0]]-V0[E[:,1]],axis=1)
+    ratio=np.linalg.norm(Z[E[:,0]]-Z[E[:,1]],axis=1)/rest
+    if ratio.min()>=1-limit-1e-10:return Z,alpha
+    return metric_filter(X,Y,V0,E,limit)
+
+
+def metric_filter(X,Y,V0,E,limit=.02):
+    """Keep the entire segment inside both edge-length bounds.
+    Lower bounds are nonconvex: test the first crossing even when Y is valid.
+    """
+    Z,upper=extension_filter(X,Y,V0,E,limit)
+    e=X[E[:,0]]-X[E[:,1]];de=(Z-X)[E[:,0]]-(Z-X)[E[:,1]]
+    rest=np.linalg.norm(V0[E[:,0]]-V0[E[:,1]],axis=1)
+    aa=np.sum(de*de,1);bb=2*np.sum(e*de,1);cc=np.sum(e*e,1)-(rest*(1-limit))**2
+    if np.min(cc)<-1e-10:raise ValueError('Metric filter starts below lower edge bound')
+    cc=np.maximum(cc,0);disc=bb*bb-4*aa*cc;roots=np.full(len(E),np.inf)
+    ok=(aa>1e-24)&(bb<0)&(disc>=0)
+    roots[ok]=2*cc[ok]/np.maximum(-bb[ok]+np.sqrt(disc[ok]),1e-30)
+    alpha=float(min(1.,roots.min()));alpha=alpha*.8 if alpha<1 else 1.
+    return X+alpha*(Z-X),alpha*upper
+
+
+def project_extension_endpoint(Y,V0,E,fixed=(),limit=.002,sweeps=80,two_sided=False):
     """Nonlinear endpoint projection before the CCD/extension line search.
     This lets an initially flat panel bend without demanding a tangential
     Newton step that would temporarily lengthen its edges.
@@ -223,11 +305,21 @@ def project_extension_endpoint(Y,V0,E,fixed=(),limit=.002,sweeps=80):
             while c in used[a] or c in used[b]:c+=1
             used[a].add(c);used[b].add(c);colors.append(c)
         colors=np.array(colors);_EDGE_COLORS[key]=[np.flatnonzero(colors==c) for c in range(colors.max()+1)]
-    groups=_EDGE_COLORS[key];rest=np.linalg.norm(V0[E[:,0]]-V0[E[:,1]],axis=1)*(1+limit)
+    if two_sided:sweeps=max(sweeps,1200)
+    groups=_EDGE_COLORS[key];base=np.linalg.norm(V0[E[:,0]]-V0[E[:,1]],axis=1);rest=base*(1+limit)
     inv=np.ones(len(Y));inv[np.asarray(fixed,int)]=0;Y=Y.copy()
+    if two_sided:
+        from .cloth_metric import project
+        order=np.concatenate(groups)
+        native=project(Y,E[order],base[order],inv,limit,sweeps)
+        if native is not None:return native
     for it in range(sweeps):
         for ids in groups:
-            a,b=E[ids].T;e=Y[a]-Y[b];length=np.linalg.norm(e,axis=1);correction=e*(np.maximum(length-rest[ids],0)/np.maximum(length,1e-12)/np.maximum(inv[a]+inv[b],1))[:,None]
+            a,b=E[ids].T;e=Y[a]-Y[b];length=np.linalg.norm(e,axis=1)
+            error=length-np.clip(length,base[ids]*(1-limit),rest[ids]) if two_sided else np.maximum(length-rest[ids],0)
+            correction=e*(error/np.maximum(length,1e-12)/np.maximum(inv[a]+inv[b],1))[:,None]
             Y[a]-=inv[a,None]*correction;Y[b]+=inv[b,None]*correction
-        if it%10==9 and np.max(np.linalg.norm(Y[E[:,0]]-Y[E[:,1]],axis=1)/rest)<1.002:break
+        if it%10==9:
+            ratio=np.linalg.norm(Y[E[:,0]]-Y[E[:,1]],axis=1)/base
+            if (np.max(abs(ratio-1))<limit+.001) if two_sided else (ratio.max()/(1+limit)<1.002):break
     return Y
