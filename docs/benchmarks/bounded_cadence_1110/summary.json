@@ -360,6 +360,6 @@
     2,
     10
   ],
-  "rigid_reference": "/home/howardji/point_tracker/reports/SAM_ACCURACY_1110/summary.json",
+  "rigid_reference": "reports/SAM_ACCURACY_1110/summary.json",
   "note": "Rigid pipeline unchanged, reuse its full cadence benchmark; cloth freshly rerun through shared step. Equal object/camera means; box excluded (no independent mask). Fixed cloth masks/depth are consistency proxies. Cloth timings are overlapping-job measurements, not isolated speed comparisons."
 }

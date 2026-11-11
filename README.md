@@ -1,107 +1,172 @@
-# realpc: causal scene extraction
+# realpc
 
-The current entry point is `ScenePipeline.step(t, frames, q)` in `realpc/scene_pipeline.py`. Live inference and training-data conversion call this same function. It produces fixed-identity robot, rigid-object, static-scene and cloth points from current RGB-D and calibrated joints.
+Causal RGB-D scene extraction for calibrated robot workspaces. **Exactly two
+pipelines** share one tracking implementation and the same current assets:
 
-The shared policy is **SAM every processed frame for every object**. This gave the highest equal-object mean silhouette overlap in full-episode comparisons of intervals 1, 2, 3 and 10. It does not win every object or depth metric. See [validation and limitations](docs/VALIDATION.md) for the complete accuracy/speed comparison and unresolved cloth deformation errors. The dataset conversion is staged after the release checks and videos; earlier partial outputs are preserved.
+| Pipeline | SAM policy | Intended use | Config |
+|---|---|---|---|
+| **accurate** | Every processed frame | Dataset production and difficult occlusion/contact sequences | [pipeline_accurate.json](configs/pipeline_accurate.json) |
+| **fast** | Initialization and tracking-failure events only | Lower-cost rigid tracking when occasional alignment regressions are acceptable | [pipeline_fast.json](configs/pipeline_fast.json) |
 
-## What runs
+Both fit rigid meshes to current depth, generate robot points from FK, and track
+cloth with the current deformable shirt template. Between SAM events, fast uses
+depth/mesh association for rigid objects and depth/flow propagation for cloth.
+It is not a second segmentation model. Both modes call the same
+`ScenePipeline.step(t, frames, q)` in live inference and recording conversion;
+only current/past observations enter the step.
 
-1. One scene segmentation stream refreshes all objects using one shared SAM2 model and one forward memory per camera. The selected schedule refreshes every frame. With a larger configured interval, current depth, mesh predictions and optical flow carry masks between refreshes; skipped frames never enter SAM.
-2. Rigid objects use depth/mesh fitting and gripper FK when held. The cloth uses a clean shirt template, causal point tracks and a deformable mesh. Robot geometry comes from FK.
-3. Fixed mesh/link samples produce the point cloud. The recording adapter saves the same output that a live consumer receives.
+## Install and assets
 
-`configs/scene_pipeline_v2.json` is the shared config for the SAM interval, recovery thresholds and tracker settings. There is no task-specific SAM schedule. Calibration and object libraries are offline setup; runtime uses only current/past frames. See [how extraction works](docs/HOW_EXTRACTION_WORKS.md).
-
-## Offline setup
-
-- Camera/arm calibration: `configs/calib_yam_rig_v3.json`, fixed three-frame joint lag and joint zero offsets.
-- Robot: `configs/yam_bimanual.json` and the YAM URDF/link meshes.
-- Rigid library: `assets/objects_v3/<task>/`, including the sweep tray, four-peg stand and asymmetric ear-shaped mug handle.
-- Cloth: fixed single-sheet rest asset under `assets/cloth/tshirt_candidate132/`, fitted offline using multi-view evidence across the episode. Current frame0 registration fits its pose/wrinkles; topology, rest metric and material sample IDs then persist.
-- Models: SAM2 small and online CoTracker under `.model_cache/`. SAM uses the checkpoint in the shared config; CoTracker defaults to the repo cache (`REALPC_MODEL_CACHE` can override its root). Its checkout is `hub/facebookresearch_co-tracker_main/` and checkpoint is `hub/checkpoints/scaled_online.pth`. Model weights and recordings are not committed.
-
-Install `requirements.txt`, `requirements-cloth.txt` and `requirements-dev.txt` (tests), plus the matching PyTorch/PyTorch3D, Open3D and SAM2 packages. `ffmpeg` must be on PATH. The tested local environment is `/home/howardji/miniconda3/envs/myenv`; its Open3D build needs the system `libstdc++` preload below.
-
-## Convert recordings
+From a checkout, install the tested Python dependencies:
 
 ```bash
-export OMP_NUM_THREADS=2 MKL_NUM_THREADS=2
-export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6
-python scripts/convert_scene.py \
-  --episodes /path/to/sweep/episode_0000 /path/to/hang/episode_0000 /path/to/greycloth/episode_0000 \
-  --out /path/to/dataset_v2 --config configs/scene_pipeline_v2.json --save-masks
+pip install -r requirements.txt -r requirements-cloth.txt -r requirements-dev.txt
 ```
 
-`--stop 12` runs a prefix check. `--skip-existing` reuses only files with matching config, implementation/assets hash and frame count. Outputs are written atomically, then loaded through `realpc.dataset.load`. Each episode has a QA summary, config, source hashes and file checksum. The root has `schema.json` and `manifest.json`.
+Also install matching CUDA PyTorch/PyTorch3D, Open3D, SAM2, and put `ffmpeg` on
+PATH. Tested package versions are recorded in the requirements files. For an
+Open3D `GLIBCXX` error, use a compatible system/Conda C++ runtime; machine-specific
+library paths are not baked into the commands.
 
-```python
-from realpc.dataset import load
-d = load('/path/to/dataset_v2/sweep/episode_0000.npz')
-print(d['points'].shape, d['valid'].shape)  # [T,N,3], [T,N]
+Place model dependencies under `.model_cache/`, or set `REALPC_MODEL_CACHE`:
+
+```
+.model_cache/
+  sam2/sam2.1_hiera_small.pt
+  hub/facebookresearch_co-tracker_main/   # CoTracker source checkout
+  hub/checkpoints/scaled_online.pth
 ```
 
-## Live inference
+`REALPC_SAM_CHECKPOINT` optionally overrides only the SAM checkpoint. Both modes
+resolve asset paths relative to their config, not the shell's working directory.
 
-Export `meta.json`, `calib.json` and `table_region.json` from the calibrated offline setup into a setup directory. The live constructor needs no recording, fused frames or joint-history file:
+Only the selected assets are on main:
+
+- `assets/objects_v3/`: sweep box/tray, broom, dustpan, debris; hang mug with the
+  asymmetric **ear-shaped handle**, and the **four-peg stand**.
+- `configs/calib_yam_rig_v3.json`: current camera/arm calibration and fixed past
+  joint alignment; `configs/yam_bimanual.json` plus `robot_models/yam_v1/`: current robot.
+- `assets/cloth/tshirt_candidate132/`: current offline rest asset, used by the
+  bounded tracker with adaptive contact refinement. The directory's candidate
+  number identifies the asset, not an older runtime pipeline.
+
+Older assets/calibrations/configs are preserved on
+[`archive/pre-two-pipelines-20261111`](https://github.com/LOL-png/realpc/tree/archive/pre-two-pipelines-20261111).
+They are not loaded by either preset. Model weights and recordings are not committed.
+
+## Accurate pipeline
+
+Use this for accuracy-first conversion, occlusion, hanging contact and folding.
+It is the previous selected `scene_pipeline_v2` configuration, now named
+`pipeline_accurate.json`, with SAM on every frame and depth fitting afterward.
+
+```bash
+python -m realpc accurate convert --episodes data/sweep/episode_0000 \
+  --out out/accurate --save-masks
+python -m realpc accurate live --setup setup/rig --task sweep \
+  --source camera_adapter:packets --out out/live_accurate
+```
+
+The fixed-tracker SAM-rate benchmark measured **0.866 fps sweep, 1.251 fps hang**,
+and equal-object/camera mean IoU **0.8231** at interval 1. The bounded cloth
+reference measured **0.0676 fps in concurrent runs**, not an isolated speed test.
+Later contact and initialization corrections have separate validation, so these
+are benchmark-snapshot measurements, not a new timing of this release.
+
+## Fast pipeline
+
+Use this when reduced SAM computation matters more than the best alignment.
+`interval: 0` disables periodic refresh; SAM still runs at initialization and
+persistent/urgent fit failures, subject to the same configured cooldowns. Rigid
+tracking uses depth, mesh predictions and gripper FK between events. Cloth uses
+the same bounded solver, so fewer SAM calls do **not** guarantee faster cloth fitting.
+
+```bash
+python -m realpc fast convert --episodes data/hang/episode_0000 \
+  --out out/fast --save-masks
+python -m realpc fast live --setup setup/rig --task hang \
+  --source camera_adapter:packets --out out/live_fast
+```
+
+The **historical event-only rigid fallback** measured **2.69 fps sweep / 5.46 fps
+hang**, versus 1.06 / 1.80 fps for its contemporaneous SAM baseline. It called SAM
+on 11.7% / 3.2% of frames. Mug median IoU fell from 0.851/0.843 to **0.768/0.833**
+(top/side); broom changed from 0.783/0.818 to **0.803/0.809**. See the
+[historical event-only table and scope](docs/benchmarks/event_only_1109/README.md).
+Those runs predate later asset/tracker changes. **Current fast with the newest
+assets has not been benchmarked end to end; event-only cloth is unmeasured.**
+
+The shared SAM-rate benchmark did not test event-only mode. Its interval-10 result
+is context, not a measurement of fast:
+
+| SAM interval | Mean IoU | Sweep fps | Hang fps | Cloth fps (concurrent) |
+|---|---:|---:|---:|---:|
+| 1 | 0.8231 | 0.866 | 1.251 | 0.0676 |
+| 2 | 0.8072 | 1.369 | 1.968 | 0.0652 |
+| 3 | 0.8124 | 1.689 | 2.490 | 0.0779 |
+| 10 | 0.8032 | 2.490 | 3.977 | 0.0587 |
+
+These are recorded benchmark ablations, not additional supported pipelines.
+[Per-object results and methodology](docs/benchmarks/bounded_cadence_1110/README.md)
+distinguish independent rigid masks, cloth proxy masks and the box proxy excluded
+from the primary score. One episode per task does not establish generalization.
+Playback FPS is unrelated to extraction throughput.
+
+## Live input and output contract
+
+The live CLI imports your `camera_adapter:packets` zero-argument factory. It must
+yield dictionaries with consecutive `tick` values starting at zero, `frames`
+mapping camera names to `(depth_metres, BGR_image)`, and calibrated, time-aligned
+left/right joint vectors in `q`. Top/side RGB-D are required; wrists are optional.
+The hardware adapter owns acquisition; the tracker never opens future frames.
+`--setup` contains only `meta.json`, `calib.json`, and `table_region.json`.
 
 ```python
 from realpc.live import SceneSetup, build_live_pipeline
-setup = SceneSetup('/path/to/setup', task='greycloth')
-pipeline = build_live_pipeline(setup, 'configs/scene_pipeline_v2.json', cloth=True)
-# frames: {camera: (depth_in_metres, BGR_image)}; q: calibrated, time-aligned left/right joints.
-out = pipeline.step(t, frames, q)
-points = pipeline.points(out)
+from realpc.__main__ import preset_config
+
+pipeline = build_live_pipeline(SceneSetup('setup/rig', task='greycloth'),
+                               preset_config('accurate'), cloth=True)
+row = pipeline.step(t, current_frames, calibrated_joints)
+points = pipeline.points(row)
 ```
 
-Supply consecutive ticks starting at zero and current top/side RGB-D. Wrist RGB-D is optional and uses current FK camera poses. Joint alignment and zero-offset correction happen in the input adapter using the fixed past lag; the live step never reads a recording or future joints. `SceneSetup` exposes only static calibration metadata. The live constructor rejects recording-specific lag curves.
+The live CLI writes one point NPZ per tick, with finite-point validity, SAM-call
+status and cloth quality flags. Use the Python API to consume those same outputs
+in memory. Recording conversion writes compact fixed-identity samples/poses plus
+QA, provenance, config and checksums; its format is deliberately different from
+the simple per-frame live export:
 
-## Validation and limits
-
-- `tests/check_scene_live_parity.py` compares live packets with converted points and masks while blocking recording access inside the live pipeline.
-- All cloth geometry remains **approximate**, including initialization. `cloth_valid` is the shared current-frame support/strain/crossing/contact gate, not a frame-number cutoff or a hidden-material certificate. See [quality flags](docs/CLOTH_QUALITY_FLAGS.md). The selected tracker bounds local strain and uses collision-filtered fitting; brief held-contact lag triggers a bounded extra solve. Visible fold alignment remains approximate.
-- Dark/occluded rigid surfaces, fast motion and imperfect wrist calibration remain difficult. SAM recovery cannot correct a wrong mesh or calibration.
-- Playback frame rate is not extraction throughput. Final timings must include mask propagation, tracking and initialization; report the actual fraction of frames using SAM.
-
-## One GPU job for the complete release
-
-See [cluster staging, submission and recovery](docs/CLUSTER.md). One sequential
-Slurm allocation runs environment checks, tests, seven validation episodes,
-live/conversion parity, all 52 conversions, per-episode videos and quality flags,
-manifest/checksum verification, and the zero-shot learned/analytic encoder audit.
-Completed stages resume from fingerprinted markers; no nested jobs are submitted.
-
-```bash
-sbatch scripts/cluster/run.sbatch
+```python
+from realpc.dataset import load
+d = load('out/accurate/sweep/episode_0000.npz')
+print(d['points'].shape, d['valid'].shape)  # [T,N,3], [T,N]
 ```
 
-The staged run must have `READY` before submission/release. The provided launcher
-uses one Ampere-or-newer GPU on `sc-loprio`, account `viscam`, 96 GB RAM, and a
-48-hour limit. Exclude currently bad nodes at submission as described in the guide.
-Orion inputs, environment and outputs share a 50 GB ceiling; a 47 GB guard leaves
-headroom. Finished outputs can be copied to external storage without recomputation.
+`convert --stop 12` checks a prefix; `--skip-existing` only reuses matching
+config/code/assets and complete frame counts. `--save-masks` enables shared-mask QA.
+All cloth is **approximate**. `cloth_valid` checks current surface support,
+strain, crossings and held-contact consistency; it does not certify hidden layers
+or material correspondence. See [quality flags](docs/CLOTH_QUALITY_FLAGS.md) and
+[validation](docs/VALIDATION.md).
+
+## Tests, QA and cluster processing
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests/test_*.py
-python tests/check_scene_live_parity.py --converted /path/to/dataset_v2/sweep/episode_0000.npz --frames 32 --out parity.json
+export REALPC_EPISODES_ROOT=/path/to/recordings
+python tests/check_scene_live_parity.py \
+  --converted out/accurate/sweep/episode_0000.npz --frames 32 --out parity.json
+python scripts/qa_scene_dataset.py --dataset out/accurate --out out/qa --example-videos
 ```
 
-Set `REALPC_EPISODES_ROOT` for parity and QA, `REALPC_MASKS_ROOT` for optional
-independent QA masks, and `PLWM_SE3_SRC` for the external SE(3) encoder source.
-The cluster driver sets these consistently. Do not mistake the round-trip error
-of extracted points for alignment accuracy against camera observations.
+`REALPC_MASKS_ROOT` supplies optional independent QA masks; cloth QA additionally
+uses `--cloth-reference-inputs`. These references never enter conversion.
+`PLWM_SE3_SRC` locates the external SE(3) AE source for round-trip evaluation.
+[Cluster instructions](docs/CLUSTER.md) cover staged environments, choosing a
+preset, one-job conversion/QA/encoder evaluation, checksums and optional delivery.
+Never update a running job's frozen checkout when updating this repository.
 
-## Repository scope
-
-`realpc/` contains the shared runtime and its geometry helpers; `scripts/` has
-conversion, QA, rendering and encoder entry points; `configs/` and `assets/`
-contain the selected setup; `tests/` checks geometry, flags and live parity.
-The historical experiment launchers and competing conversion scripts are preserved
-on `archive/experiments-20261111` and tag `realpc-before-cleanup-20261111`, and have
-been removed from this branch. Compatibility helpers required by the current
-runtime/tests remain. Weights, recordings, output datasets and credentials are
-external to the repository.
-
-The earlier 18-test and parity results are recorded in [preflight](docs/PREFLIGHT_1111.md).
-The new cluster run records its own tests and full-dataset results; pending results
-are not certified by the code release tag. Cloth is always approximate, with
-per-frame support, strain, intersection and contact flags retained in the dataset.
+The public entry points are the four commands above. `scripts/` contains their
+conversion, audit and batch helpers; `realpc/` contains shared tracking and geometry
+code. Historical experiments live on archive branches, not as alternate presets.

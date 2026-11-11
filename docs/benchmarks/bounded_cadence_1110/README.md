@@ -27,4 +27,4 @@ The score gives equal weight to five rigid objects plus cloth, and equal weight 
 
 Each bounded cloth run has zero exported-mesh triangle crossings and at most 1.90% extension. Good silhouette overlap does not establish material identity or hidden-layer correctness. Some broom/top and depth metrics favor other rates; one rate does not dominate every object. The subsequent adaptive-contact change is a separate N1 cloth validation, not a new four-rate benchmark.
 
-Full per-frame audits and videos: /home/howardji/point_tracker/reports/ASTRA_Q30_1110/unified136/ and /home/howardji/point_tracker/reports/SAM_ACCURACY_1110/.
+Full per-frame audits and videos: reports/ASTRA_Q30_1110/unified136/ and reports/SAM_ACCURACY_1110/.

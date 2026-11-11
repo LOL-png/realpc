@@ -45,7 +45,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', required=True)
     parser.add_argument('--episodes-root', required=True)
-    parser.add_argument('--config', default=str(ROOT / 'configs/scene_pipeline_v2.json'))
+    parser.add_argument('--config', default=str(ROOT / 'configs/pipeline_accurate.json'))
     args = parser.parse_args()
     root, recordings = Path(args.dataset), Path(args.episodes_root)
     expected = sorted(p.relative_to(recordings) for task in ('sweep', 'hang', 'greycloth')

@@ -86,7 +86,7 @@
   "version": "v3.1 four individual pegs + two-camera mask/depth refit",
   "refine_views": 60,
   "refine_tracks": [
-    "/home/howardji/data_ext/realpc_v4/trk/hang0_stand_static.npz"
+    "${REALPC_DATA_ROOT}/realpc_v4/trk/hang0_stand_static.npz"
   ],
   "unseen_geometry": "Prior-completed: backs, wall thickness, hidden peg and handle sections. Not measured surfaces.",
   "fit_source": "Canonical stand depth from top/side every20 frames; visual peg census with wrist views. Static asset fitting only.",

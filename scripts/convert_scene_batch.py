@@ -15,7 +15,7 @@ def main():
     parser.add_argument('--episodes-root', required=True)
     parser.add_argument('--out', required=True)
     parser.add_argument('--workers', type=int, default=2)
-    parser.add_argument('--config', default=str(ROOT / 'configs/scene_pipeline_v2.json'))
+    parser.add_argument('--config', default=str(ROOT / 'configs/pipeline_accurate.json'))
     args = parser.parse_args()
     if args.workers < 1:
         parser.error('--workers must be positive')

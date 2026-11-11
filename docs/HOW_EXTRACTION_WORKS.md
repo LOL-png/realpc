@@ -1,11 +1,27 @@
-# How the points are extracted
+# How extraction works
 
-The robot supplies two RGB-D views and joint angles. Before processing, we prepare the camera calibration, robot model and a mesh library for the rigid objects. These are reusable setup assets, not labels supplied during tracking. The shirt uses a clean rest template prepared offline, then registered to the first observed frame. Offline asset fitting can use multiple recorded views; runtime deformation cannot use future frames.
+Choose `accurate` (SAM each frame) or `fast` (SAM at initialization/failure).
+Both use the current objects_v3 library, calibration v3, robot model and shirt
+rest template. These meshes and calibration are prepared offline; their reuse is
+analogous to reusing a robot URDF, not access to future camera frames at runtime.
 
-Every frame goes through one segmentation stream. The selected accuracy-first setting runs SAM on every frame for the whole scene. There is one SAM memory per camera, shared across the scene's objects; the cloth tracker does not run a separate SAM job. Larger intervals remain available: depth, optical flow and predicted geometry carry masks between scheduled or failure-triggered refreshes.
+Each step receives current top/side RGB-D, optional wrist RGB-D and calibrated
+joints. One shared scene segmentation stream supplies all object masks. Robot
+geometry comes from FK. Rigid meshes are fit to visible depth using previous-pose
+and held-gripper predictions. Cloth uses the current deformable template, causal
+CoTracker tracks, depth/flow and bounded physical/contact constraints. Between SAM
+events, fast associates current depth with predicted meshes instead of encoding
+another SAM frame. It propagates cloth masks without a separate SAM schedule.
 
-The rigid trackers fit their meshes to the current depth. At initialization, sufficient masked depth is registered against samples of the actual mesh; an older partial construction scan supplies the colour-only fallback when masked depth is insufficient. Held objects also use gripper motion. The cloth tracker deforms the shirt template using both views, point tracks and grasp constraints. FK places the robot links. Fixed samples on these surfaces become the output point cloud, preserving sample identity over time.
+Live inference and dataset conversion call the identical `ScenePipeline.step`.
+The live adapter acquires current packets; conversion reads packets sequentially
+from recordings with the calibrated fixed past joint lag. Neither tracker reads
+future frames or evaluation masks. Fixed material/link samples give persistent
+point identities; conversion stores compact samples/poses, while the live API
+returns points and quality flags directly.
 
-Live inference calls `ScenePipeline.step` once with the current images and calibrated joints. Training conversion reads the next recorded packet and calls exactly the same function. It additionally saves poses, points, masks and QA metadata. It does not smooth backward, look ahead, or consume evaluation masks. Calibration and asset building can use offline recordings; that work is not repeated inside the causal step.
-
-The shared SAM interval is 1 frame. The completed rigid benchmark measured 0.87 fps for sweep and 1.25 fps for hang. The fresh bounded cloth reference measured 0.068 fps in a concurrent validation run; the historical 0.56 fps cloth result belongs to the older, excessively stretching tracker. These are extraction rates, not playback rates or real-time performance. See `VALIDATION.md` for the cadence comparison and `CLOTH_EXPERIMENT_STATUS.md` for the current shirt audit. Hidden material and fine wrinkles remain uncertain even when visible masks and depth agree.
+The four public commands, input packet contract, measured benchmark rates and
+limitations are in the [README](../README.md). The [quality policy](CLOTH_QUALITY_FLAGS.md)
+marks every shirt estimate approximate and records per-frame validity separately.
+Hidden surfaces and material identity remain uncertain even when visible depth
+and silhouettes agree. Exact current-fast speed/accuracy is not yet measured.

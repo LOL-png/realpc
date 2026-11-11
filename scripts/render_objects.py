@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Render stills of library meshes (4 views each, vertex colours, Phong shading) into one PNG per task.
 
-  python scripts/render_objects.py --lib assets/objects/<task> --out <png>
+  python scripts/render_objects.py --lib assets/objects_v3/<task> --out <png>
 """
 import argparse
 import glob

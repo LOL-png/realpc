@@ -39,13 +39,15 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('--run-root', required=True)
     p.add_argument('--dataset', required=True)
+    p.add_argument('--pipeline', choices=('accurate','fast'), default='accurate')
+    p.add_argument('--baseline-dataset', default=os.environ.get('REALPC_V1_DATASET'))
     a = p.parse_args()
     root, dataset = Path(a.run_root), Path(a.dataset)
     reports, markers, logs = root/'reports', root/'markers', root/'logs'
     for path in (reports, markers, logs, dataset):
         path.mkdir(parents=True, exist_ok=True)
     recordings = root/'inputs/hf'
-    config = REPO/'configs/scene_pipeline_v2.json'
+    config = REPO/'configs'/f'pipeline_{a.pipeline}.json'
     ckpt = root/'checkpoints/ae_wmstats.pt'
     commit = subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()
     fingerprint = hashlib.sha256((commit+sha(config)+sha(ckpt)).encode()).hexdigest()
@@ -153,7 +155,7 @@ def main():
             '--fb_ckpt',ckpt,'--fb-only','--out',out],[out])
         combined.update(json.loads(out.read_text()))
     atomic_json(enc/'roundtrip_v2.json',combined)
-    v1=root.parent/'agentwm_v1'
+    v1=Path(a.baseline_dataset) if a.baseline_dataset else root.parent/'dataset_v1'
     for label,base in [('v1',v1),('v2',dataset)]:
         out=enc/(label+'_cloth_matched.json')
         run('matched_'+label,['scripts/roundtrip_v4.py','--converted',base/'greycloth/episode_0000.npz',

@@ -22,8 +22,14 @@ def load_scene_config(path):
     for section, key in (('cloth', 'shirt_asset'), ('segmentation', 'checkpoint')):
         value = config.get(section, {}).get(key)
         if value:
-            asset = Path(value).expanduser()
+            asset = Path(os.path.expandvars(value)).expanduser()
             config[section][key] = str(asset if asset.is_absolute() else (path.parent / asset).resolve())
+    cache = os.environ.get('REALPC_MODEL_CACHE')
+    if cache and config.get('segmentation', {}).get('checkpoint'):
+        config['segmentation']['checkpoint'] = str(Path(cache).expanduser().resolve() / 'sam2/sam2.1_hiera_small.pt')
+    checkpoint = os.environ.get('REALPC_SAM_CHECKPOINT')
+    if checkpoint:
+        config.setdefault('segmentation', {})['checkpoint'] = str(Path(checkpoint).expanduser().resolve())
     return config
 
 

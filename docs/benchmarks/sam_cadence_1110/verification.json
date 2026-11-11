@@ -29,7 +29,7 @@
   "pipeline_tests": {
     "passed": 4,
     "skipped": 0,
-    "command": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 REALPC_TEST_EPISODE=/home/howardji/data_ext/agentwm_probe/hf/sweep/episode_0000 python -m pytest tests/test_pipeline.py -q"
+    "command": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 REALPC_TEST_EPISODE=${REALPC_DATA_ROOT}/agentwm_probe/hf/sweep/episode_0000 python -m pytest tests/test_pipeline.py -q"
   },
   "converted_files_load_verified": 12
 }

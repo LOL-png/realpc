@@ -4539,8 +4539,8 @@
         "pairs": 834
       }
     ],
-    "seed": "/home/howardji/data_ext/astra_accuracy_1110/video_inputs/n1",
-    "inputs": "/home/howardji/data_ext/astra_cloth/auto_inputs",
+    "seed": "${REALPC_DATA_ROOT}/astra_accuracy_1110/video_inputs/n1",
+    "inputs": "${REALPC_DATA_ROOT}/astra_cloth/auto_inputs",
     "method": "visible depth chords, robust upper envelope, symmetric 15-control rest-pattern fit; one alternation",
     "limitations": [
       "correspondences inherit seed errors",

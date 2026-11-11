@@ -1,6 +1,6 @@
 # Unified pipeline validation — 2026-11-10
 
-The selected shared configuration is `configs/scene_pipeline_v2.json`: SAM every processed frame, rigid depth/mesh tracking, FK robot points, and a bounded single-sheet cloth tracker. Live inference and conversion call the same `ScenePipeline.step`.
+The selected shared configuration is `configs/pipeline_accurate.json`: SAM every processed frame, rigid depth/mesh tracking, FK robot points, and a bounded single-sheet cloth tracker. Live inference and conversion call the same `ScenePipeline.step`.
 
 ## SAM cadence
 
@@ -35,8 +35,8 @@ Known rigid weaknesses include a release-time broom error near 587–599 and dus
 ## Artifacts
 
 - [Selected shirt contact sheet](benchmarks/bounded_cloth_1110/contact_sheet.jpg) and [machine-readable summary](benchmarks/bounded_cloth_1110/summary.json).
-- Full shirt video, per-frame metrics and plots: `/home/howardji/point_tracker/reports/ASTRA_Q30_1110/shirt138/`.
-- Sweep/hang videos: `/home/howardji/point_tracker/reports/SAM_ACCURACY_1110/sweep_n1/` and `hang_n1/`.
+- Full shirt video, per-frame metrics and plots: `reports/ASTRA_Q30_1110/shirt138/`.
+- Sweep/hang videos: `reports/SAM_ACCURACY_1110/sweep_n1/` and `hang_n1/`.
 - Earlier evidence: [historical pre-bounded validation](https://github.com/LOL-png/realpc/blob/archive/experiments-20261111/docs/VALIDATION_PRE_BOUNDED_1110.md).
 
 The release is local only. The 52-episode conversion follows the finalized code, parity checks and delivery of these videos; existing partial data are preserved.

@@ -8,6 +8,6 @@ Matched499-frame pass rate previousD→ear: mug top91.8→91.0%, side100→99.8%
 
 Replay105.5s (~4.7fps including setup),30 SAM camera calls. Loader and saved-mesh geometry checks pass. No dataset_v2 overwrite.
 
-[Full report, four views, overlays and video](/home/howardji/point_tracker/reports/ASTRA_Q29_1109/mug_ear_review/README.md).
+The original full report and videos are external benchmark artifacts; the measurements above are retained here for provenance.
 
-Rebuild: `scripts/build_mug_handle_candidate.py --params <handle_params.json> --source assets/objects_v3 --out <separate candidate library>`; the profile field preserves support for prior straight-strap candidates.
+The historical asset-fitting scripts are preserved on `archive/experiments-20261111`. Both current presets use the finished ear-shaped asset; neither rebuilds the handle during tracking.

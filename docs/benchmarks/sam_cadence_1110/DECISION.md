@@ -14,13 +14,13 @@ All rates use full causal episodes: hang0 499 frames, sweep0 849, greycloth0 453
 
 Rigid accuracy uses fixed Q28 masks for evaluation only. Cloth uses the same cached mask/depth proxy for every rate; this is not independent material ground truth. Box overlap is agreement with a fixed N10 mask cache, supplemented by raw-depth checks and visual review. Recovery thresholds are unchanged. N1/N2/N3 SAM counts equal ceil(frames/N); N10 includes extra recovery refreshes.
 
-Conversions ran serially on the local RTX4070TiSUPER. FPS includes initialization, reading, tracking, saving and load verification; it excludes the offline audit and video rendering. N10 cloth reuses the completed full control after exact source/config/asset and output-checksum verification; the other conversions are fresh. Throughput and alignment tables are in README.md; per-view pass rates, actual SAM fractions and depth are in per_object_alignment.csv and summary.json. Physical audit: cloth_physics.json. Full per-frame measurements: /home/howardji/data_ext/astra_accuracy_1110/nN/audit/.
+Conversions ran serially on the local RTX4070TiSUPER. FPS includes initialization, reading, tracking, saving and load verification; it excludes the offline audit and video rendering. N10 cloth reuses the completed full control after exact source/config/asset and output-checksum verification; the other conversions are fresh. Throughput and alignment tables are in README.md; per-view pass rates, actual SAM fractions and depth are in per_object_alignment.csv and summary.json. Physical audit: cloth_physics.json. Full per-frame measurements: ${REALPC_DATA_ROOT}/astra_accuracy_1110/nN/audit/.
 
 Reproduce using scripts/benchmark_scene_cadence.py, then scripts/summarize_scene_cadence.py. Review before setting --selected; the summary verifies that all configurations differ only in interval. scripts/cadence_cloth_physics.py and scripts/plot_cadence_cloth.py reproduce the cloth diagnostics.
 
 ## Artifacts
 
-Report directory: /home/howardji/point_tracker/reports/SAM_ACCURACY_1110/. Contact sheets compare all rates at identical frames: sweep_0587_all_rates.jpg, sweep_0599_all_rates.jpg, sweep_0637_all_rates.jpg, sweep_0750_all_rates.jpg, hang_0387_all_rates.jpg. cloth_per_frame.png plots unsmoothed camera metrics. cloth_n1/both_cameras.mp4 is the selected-policy cloth video; cloth_n3 and cloth_n10 provide comparisons.
+Report directory: reports/SAM_ACCURACY_1110/. Contact sheets compare all rates at identical frames: sweep_0587_all_rates.jpg, sweep_0599_all_rates.jpg, sweep_0637_all_rates.jpg, sweep_0750_all_rates.jpg, hang_0387_all_rates.jpg. cloth_per_frame.png plots unsmoothed camera metrics. cloth_n1/both_cameras.mp4 is the selected-policy cloth video; cloth_n3 and cloth_n10 provide comparisons.
 
 The cancelled 52-episode dataset conversion stays cancelled. The 27 finished outputs and logs are unchanged; they are not relabelled as N1 outputs. No encoder run, remote upload or push is part of this work.
 

@@ -197,10 +197,12 @@ def convert_episode(ep_path, out_root, config, assets, calibration, stop=None, s
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    preset = globals().get('PUBLIC_PRESET')
+    parser = argparse.ArgumentParser(prog=f'python -m realpc {preset} convert' if preset else None)
     parser.add_argument('--episodes', nargs='+', required=True)
     parser.add_argument('--out', required=True)
-    parser.add_argument('--config', default=str(ROOT / 'configs/scene_pipeline_v2.json'))
+    parser.add_argument('--config', default=str(ROOT / 'configs/pipeline_accurate.json'),
+                        help=argparse.SUPPRESS if preset else 'Shared pipeline configuration')
     parser.add_argument('--assets', default=str(ROOT / 'assets/objects_v3'))
     parser.add_argument('--calibration', default=str(ROOT / 'configs/calib_yam_rig_v3.json'))
     parser.add_argument('--stop', type=int)
