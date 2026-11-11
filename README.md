@@ -42,17 +42,18 @@ print(d['points'].shape, d['valid'].shape)  # [T,N,3], [T,N]
 
 ## Live inference
 
-Construct a `StreamConverter` with the same calibration, robot and object library, then:
+Export `meta.json`, `calib.json` and `table_region.json` from the calibrated offline setup into a setup directory. The live constructor needs no recording, fused frames or joint-history file:
 
 ```python
-from realpc.scene_pipeline import ScenePipeline, load_scene_config
-pipeline = ScenePipeline(converter, load_scene_config('configs/scene_pipeline_v2.json'), cloth=has_cloth)
+from realpc.live import SceneSetup, build_live_pipeline
+setup = SceneSetup('/path/to/setup', task='greycloth')
+pipeline = build_live_pipeline(setup, 'configs/scene_pipeline_v2.json', cloth=True)
 # frames: {camera: (depth_in_metres, BGR_image)}; q: calibrated, time-aligned left/right joints.
 out = pipeline.step(t, frames, q)
 points = pipeline.points(out)
 ```
 
-Supply consecutive ticks starting at zero and current top/side RGB-D. Wrist RGB-D is optional and uses current FK camera poses. Joint alignment happens in the input adapter using the fixed past lag; the live step never reads a recording or future joints.
+Supply consecutive ticks starting at zero and current top/side RGB-D. Wrist RGB-D is optional and uses current FK camera poses. Joint alignment and zero-offset correction happen in the input adapter using the fixed past lag; the live step never reads a recording or future joints. `SceneSetup` exposes only static calibration metadata. The live constructor rejects recording-specific lag curves.
 
 ## Validation and limits
 

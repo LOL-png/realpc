@@ -3,6 +3,8 @@ import argparse
 import json
 from pathlib import Path
 import sys
+import shutil
+import tempfile
 
 import cv2
 import numpy as np
@@ -10,12 +12,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from realpc.io import Episode, DepthStream
-from realpc.calib_rig import RigCalib
-from realpc.config import load_config, build_arms
-from realpc.diffcalib import TorchArm
-from realpc.v4 import StreamConverter
-from realpc.scene_pipeline import ScenePipeline
 from realpc.dataset import load
+from realpc.live import SceneSetup, build_live_pipeline
 
 p = argparse.ArgumentParser()
 p.add_argument('--converted', required=True)
@@ -27,13 +25,15 @@ d = load(str(path))
 task, episode = str(d['task']), str(d['episode'])
 ep = Episode(f'/home/howardji/data_ext/agentwm_probe/hf/{task}/{episode}')
 config = json.loads(path.with_name(path.stem + '_config.json').read_text())
-cfg = load_config(ROOT / 'configs/yam_bimanual.json')
-r = cfg['robot']
-tarm = TorchArm(str(Path(cfg['_dir']) / r['urdf']), r['arm_joints'], r['finger_joints'])
-cal = RigCalib.load(ROOT / 'configs/calib_yam_rig_v3.json')
 library = ROOT / 'assets/objects_v3' / task
-conv = StreamConverter(ep, cal, tarm, build_arms(cfg, ep.calib), str(library), seg_dir=None)
-pipe = ScenePipeline(conv, config, cloth=task == 'greycloth')
+# The live side receives only static setup files, not an Episode object.
+setup_dir = tempfile.TemporaryDirectory(prefix='realpc-live-setup-')
+for name in ('meta.json', 'calib.json', 'table_region.json'):
+    shutil.copy2(Path(ep.path) / name, Path(setup_dir.name) / name)
+setup = SceneSetup(setup_dir.name, task)
+assert not hasattr(setup, 'low') and not hasattr(setup, 'video')
+pipe = build_live_pipeline(setup, config, cloth=task == 'greycloth', library=library)
+conv, cal = pipe.converter, pipe.converter.cal
 cameras = [c for c in ('top', 'side', 'left_wrist', 'right_wrist')
            if (Path(ep.path) / (c + '_depth.mkv')).exists()]
 streams = {c: DepthStream(str(Path(ep.path) / (c + '_depth.mkv'))) for c in cameras}
@@ -95,5 +95,8 @@ report = dict(task=task, frames=pipe.tick + 1, maximum_point_difference_m=maximu
 report['cloth_quality_flags_checked'] = 'cloth_approximate' in d
 report['recorded_low_dim_access_blocked_during_step'] = True
 report['recorded_frame_and_camera_pose_access_blocked'] = True
+report['live_constructor_uses_setup_only'] = True
+report['live_setup_files'] = sorted(p.name for p in Path(setup_dir.name).iterdir())
 Path(a.out).write_text(json.dumps(report, indent=2))
+setup_dir.cleanup()
 print('PASS', report)
