@@ -20,7 +20,18 @@ def frame_quality(points, metrics, config):
             and coverage >= limits.get('cloth_fit_min_coverage', .5)
             and depth <= limits.get('cloth_fit_max_median_mm', 25.))
     valid = bool(finite and no_crossing and within_bound and all(views.values()))
-    return dict(valid=valid, approximate=True, finite=finite,
+    quality = dict(valid=valid, approximate=True, finite=finite,
                 crossing_checked=crossing_checked, no_detected_crossing=no_crossing,
                 strain_bound_enforced=bound > 0, within_configured_strain=within_bound,
                 supported_views=views)
+    # Optional for old saved configurations; final configurations can reject
+    # collision-limited contact lag without weakening the physical solver.
+    if 'cloth_fit_max_hard_grasp_mm' in limits:
+        pins = metrics.get('pins')
+        error = metrics.get('hard_grasp_error_mm', float('nan'))
+        checked = pins is not None and np.isfinite(pins) and pins >= 0
+        contact_ok = bool(checked and (pins == 0 or
+            (np.isfinite(error) and error <= limits['cloth_fit_max_hard_grasp_mm'])))
+        quality.update(contact_checked=bool(checked), within_configured_contact=contact_ok,
+                       valid=bool(valid and contact_ok))
+    return quality
