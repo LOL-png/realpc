@@ -6,6 +6,11 @@ frame150 cutoff. Live/replay checks compare the saved flags as well as geometry.
 
 `cloth_valid` requires finite samples, an explicit negative intersection check,
 the configured strain bound when enabled, and current top/side surface support.
+When `segmentation.cloth_fit_max_hard_grasp_mm` is configured, held contact centres
+must also remain within that current-frame error limit (5 mm in candidate 138).
+This rejects collision-limited contact lag without relaxing the mesh constraints;
+released frames do not require a held-contact check. Historical configurations
+without the field retain their original gate.
 The support thresholds reuse `segmentation.cloth_fit_min_coverage` and
 `segmentation.cloth_fit_max_median_mm`. Detailed checks are in
 `cloth_metrics.quality`. In a mode without a strain bound,
