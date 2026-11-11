@@ -44,7 +44,7 @@ class CausalClothTracker:
         keys=inspect.signature(cls).parameters
         return cls(**{k:v for k,v in config.items() if k in keys})
 
-    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False, landmark_grasp=False, init_landmarks=False, native_init_gain=None, shirt_layers=2, init_registration_iters=0, init_registration_strain=50., init_registration_arap=.2, init_registration_data=8., init_registration_coverage=20., init_registration_bending=.2, init_registration_contour=80., init_registration_focus=1., feasible_predict=False, contact_clearance=0., contact_stiffness=1e9, shirt_asset=None, global_slide=False, contact_projection=False, constraint_restore=False, compression_soft=False, held_iters=0, held_step=.025, constraint_qp=False, grasp_init_iters=0, constraint_conic=False, coverage_surface=False, robot_margin_m=.009, track_grasp=False):
+    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False, landmark_grasp=False, init_landmarks=False, native_init_gain=None, shirt_layers=2, init_registration_iters=0, init_registration_strain=50., init_registration_arap=.2, init_registration_data=8., init_registration_coverage=20., init_registration_bending=.2, init_registration_contour=80., init_registration_focus=1., feasible_predict=False, contact_clearance=0., contact_stiffness=1e9, shirt_asset=None, global_slide=False, contact_projection=False, constraint_restore=False, compression_soft=False, held_iters=0, held_step=.025, constraint_qp=False, grasp_init_iters=0, constraint_conic=False, coverage_surface=False, robot_margin_m=.009, track_grasp=False, cot_grasp=False):
         self.constraint_qp=constraint_qp;self.qp_active=False;self.constraint_conic=constraint_conic
         self.held_step=held_step
         self.held_iters=held_iters;self.grasp_init_iters=grasp_init_iters
@@ -53,6 +53,8 @@ class CausalClothTracker:
         self.contact_projection=contact_projection
         self.global_slide=global_slide
         self.shirt_asset=shirt_asset
+        self.cot_grasp=cot_grasp
+        if cot_grasp and not cot_weight:raise ValueError('CoTracker grasp voting requires cot_weight > 0 to supply online tracks')
         self.contact_stiffness=contact_stiffness
         self.contact_clearance=contact_clearance
         self.feasible_predict=feasible_predict
@@ -344,6 +346,34 @@ class CausalClothTracker:
             return int(candidates[best]),info
         return None,info
 
+    def cot_contact_landmark(self,frame,views,contact,candidates):
+        """Fallback material vote from already-bound, non-held-out CoTracker tracks."""
+        assert int(frame['max_observed_tick'])==self.tick and bool(frame['zero_lookahead'])
+        material=[];weights=[];cameras=[]
+        for camera in CAMS[:2]:
+            state=self.cot.get(camera);z=views[camera]
+            if state is None or int(frame[camera+'_cot_birth'])!=state['birth']:continue
+            if self.tick-state['birth']<32:continue
+            uv=frame[camera+'_cot_uv'];depth,inside=at_image(z['D'],uv)
+            Q=depth_points(uv,depth,z['K'],z['T']);distance=np.linalg.norm(Q-contact,axis=1)
+            good=state['good']&frame[camera+'_cot_visible']&inside&(depth>.08)&(distance<.05)
+            good &= np.arange(len(uv))%5!=0  # preserve held-out track evaluation
+            good &= np.linalg.norm(Q-state['Q'],axis=1)<.065*self.motion_scale
+            if good.any():
+                w=np.exp(-.5*(distance[good]/.03)**2);w/=w.sum()
+                material.extend(state['id'][good]);weights.extend(w);cameras.append(camera)
+        info=dict(source='nearest_mesh',track_count=len(material),track_cameras=cameras)
+        if len(np.unique(material))<3:return None,info
+        distances=dijkstra(self.graph,directed=False,indices=candidates)
+        scores=np.average(distances[:,material],axis=1,weights=weights)
+        order=np.argsort(scores);best,runner=order[:2]
+        if not np.isfinite(scores[order[:2]]).all():return None,info
+        info.update(material_distance_mm=float(scores[best]*1000),margin_mm=float((scores[runner]-scores[best])*1000))
+        if scores[best]<.20 and scores[runner]-scores[best]>.04:
+            info['source']='persistent_cotracker'
+            return int(candidates[best]),info
+        return None,info
+
     def update_pins(self,f,X,views=None):
         pi=[];pt=[]
         if not hasattr(self,'grasp_seed'):self.grasp_seed={}
@@ -378,6 +408,9 @@ class CausalClothTracker:
                     nearest=int(observed_distance.argmin())
                     if getattr(self,'track_grasp',False) and observed_distance[nearest]<.025:
                         voted,contact_association=self.tracked_contact_landmark(views,observed[nearest],candidates)
+                        if voted is None and getattr(self,'cot_grasp',False):
+                            cot_vote,cot_info=self.cot_contact_landmark(f,views,observed[nearest],candidates)
+                            if cot_vote is not None:voted,contact_association=cot_vote,cot_info
                         contact_association['applied']=bool(voted is not None and raw_distance[voted]<.060)
                         if contact_association['applied']:corner=voted
                     if raw_distance[corner]<.060 and observed_distance[nearest]<.025:
