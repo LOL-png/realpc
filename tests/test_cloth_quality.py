@@ -41,3 +41,15 @@ def test_unbounded_mode_is_explicit_and_not_a_physical_certificate():
     quality = frame_quality(points, metrics, config)
     assert quality['valid'] and quality['approximate']
     assert not quality['strain_bound_enforced']
+
+
+def test_contact_lag_gate_uses_current_hold_and_preserves_old_configs():
+    points, metrics, config = inputs()
+    failed = metrics | dict(pins=3, hard_grasp_error_mm=36.6)
+    assert frame_quality(points, failed, config)['valid']  # historical policy
+    config['segmentation']['cloth_fit_max_hard_grasp_mm'] = 5.
+    assert not frame_quality(points, failed, config)['valid']
+    assert frame_quality(points, failed | dict(hard_grasp_error_mm=1.), config)['valid']
+    assert frame_quality(points, failed | dict(pins=0), config)['valid']
+    assert not frame_quality(points, metrics, config)['valid']
+    assert not frame_quality(points, failed | dict(hard_grasp_error_mm=float('nan')), config)['valid']
