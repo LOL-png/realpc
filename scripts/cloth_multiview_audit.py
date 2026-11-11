@@ -7,12 +7,14 @@ from realpc.diffcalib import Renderer
 from realpc.cloth_inputs import project
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--fit',action='append',required=True,help='label=mesh.npz');p.add_argument('--inputs',required=True);p.add_argument('--out',required=True);a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--fit',action='append',required=True,help='label=mesh.npz');p.add_argument('--inputs',required=True);p.add_argument('--out',required=True);p.add_argument('--ticks',type=int,nargs='+',help='Audit only these saved frame indices for short diagnostic gates');a=p.parse_args()
     models={};results={}
     for spec in a.fit:
         name,path=spec.split('=',1);z=np.load(path);models[name]=(z['X'],torch.as_tensor(z['F'],dtype=torch.int64,device='cuda'));results[name]=[]
     count=min(len(x[0]) for x in models.values());torch.set_num_threads(2)
-    for t in range(count):
+    ticks=sorted(set(a.ticks)) if a.ticks is not None else list(range(count))
+    if any(t<0 or t>=count for t in ticks):p.error('Audit ticks must exist in every trajectory')
+    for t in ticks:
         with np.load(Path(a.inputs)/'frames'/f'{t:04d}.npz') as z:
             robot=z['robot'];frames={c:{k:z[c+'_'+k] for k in ('depth','mask','K','T')} for c in ('top','side')}
         rows={name:dict(t=t) for name in models}
@@ -33,8 +35,8 @@ def main():
     for name,rows in results.items():
         summaries[name]={}
         for phase,lo,hi in [('before_lift',0,160),('first_fold',160,250),('between_folds',250,335),('second_fold',335,count)]:
-            part=rows[lo:hi]
+            part=[r for r in rows if lo<=r['t']<hi]
             if part:summaries[name][phase]={c:{k:float(np.median([r[c][k] for r in part if r[c][k] is not None])) for k in ('iou','mask_recall','depth_med_mm','depth_p90_mm')} for c in ('top','side')}
-    Path(a.out).write_text(json.dumps(dict(frames=count,summary=summaries,per_frame=results,note='Identical current-frame masks/depth/calibration for every model. FK robot pixels excluded. Silhouette and depth consistency are not material-correspondence ground truth.'),indent=2));print(json.dumps(summaries,indent=2))
+    Path(a.out).write_text(json.dumps(dict(frames=count,audited_ticks=ticks,summary=summaries,per_frame=results,note='Identical current-frame masks/depth/calibration for every model. FK robot pixels excluded. Silhouette and depth consistency are not material-correspondence ground truth.'),indent=2));print(json.dumps(summaries,indent=2))
 
 if __name__=='__main__':main()

@@ -44,7 +44,7 @@ class CausalClothTracker:
         keys=inspect.signature(cls).parameters
         return cls(**{k:v for k,v in config.items() if k in keys})
 
-    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False, landmark_grasp=False, init_landmarks=False, native_init_gain=None, shirt_layers=2, init_registration_iters=0, init_registration_strain=50., init_registration_arap=.2, init_registration_data=8., init_registration_coverage=20., init_registration_bending=.2, init_registration_contour=80., init_registration_focus=1., feasible_predict=False, contact_clearance=0., contact_stiffness=1e9, shirt_asset=None, global_slide=False, contact_projection=False, constraint_restore=False, compression_soft=False, held_iters=0, held_step=.025, constraint_qp=False, grasp_init_iters=0, constraint_conic=False):
+    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False, landmark_grasp=False, init_landmarks=False, native_init_gain=None, shirt_layers=2, init_registration_iters=0, init_registration_strain=50., init_registration_arap=.2, init_registration_data=8., init_registration_coverage=20., init_registration_bending=.2, init_registration_contour=80., init_registration_focus=1., feasible_predict=False, contact_clearance=0., contact_stiffness=1e9, shirt_asset=None, global_slide=False, contact_projection=False, constraint_restore=False, compression_soft=False, held_iters=0, held_step=.025, constraint_qp=False, grasp_init_iters=0, constraint_conic=False, coverage_surface=False):
         self.constraint_qp=constraint_qp;self.qp_active=False;self.constraint_conic=constraint_conic
         self.held_step=held_step
         self.held_iters=held_iters;self.grasp_init_iters=grasp_init_iters
@@ -59,7 +59,7 @@ class CausalClothTracker:
         self.init_registration_focus=init_registration_focus
         self.init_registration_contour=init_registration_contour
         self.init_registration_iters=init_registration_iters;self.init_registration_strain=init_registration_strain;self.init_registration_arap=init_registration_arap;self.init_registration_data=init_registration_data;self.init_registration_coverage=init_registration_coverage;self.init_registration_bending=init_registration_bending
-        self.shirt_layers=shirt_layers;self.native_init_gain=native_init_gain;self.init_landmarks=init_landmarks;self.landmark_grasp=landmark_grasp;self.visible_grasp=visible_grasp;self.back_on_table=back_on_table;self.dynamics_gain=dynamics_gain;self.native_init_iters=native_init_iters;self.table_contact=table_contact;self.support_occlusion=support_occlusion;self.cot_rays_only=cot_rays_only;self.ray_observations=[];self.boundary_grasp=boundary_grasp;self.grasp_seed={};self.init_iters=init_iters;self.coverage_radius=coverage_radius;self.flat_rest=flat_rest;self.silhouette=silhouette;self.dynamics=dynamics;self.endpoint_projection=endpoint_projection;self.idle_gate=idle_gate;self.max_stretch=max_stretch;self.ipc_contact=ipc_contact;self.strain_stiffness=strain_stiffness;self.joint_physics=joint_physics;self.bending=bending;self.gravity=gravity;self.point_grasp=point_grasp;self.length_slack=length_slack;self.paired_grasp=paired_grasp;self.paired_done=set();self.layer_visibility=layer_visibility;self.material_slack=material_slack;self.cell=cell;self.wa=arap;self.wd=data;self.wt=track;self.wp=pin;self.wrists=wrists
+        self.coverage_surface=coverage_surface;self.shirt_layers=shirt_layers;self.native_init_gain=native_init_gain;self.init_landmarks=init_landmarks;self.landmark_grasp=landmark_grasp;self.visible_grasp=visible_grasp;self.back_on_table=back_on_table;self.dynamics_gain=dynamics_gain;self.native_init_iters=native_init_iters;self.table_contact=table_contact;self.support_occlusion=support_occlusion;self.cot_rays_only=cot_rays_only;self.ray_observations=[];self.boundary_grasp=boundary_grasp;self.grasp_seed={};self.init_iters=init_iters;self.coverage_radius=coverage_radius;self.flat_rest=flat_rest;self.silhouette=silhouette;self.dynamics=dynamics;self.endpoint_projection=endpoint_projection;self.idle_gate=idle_gate;self.max_stretch=max_stretch;self.ipc_contact=ipc_contact;self.strain_stiffness=strain_stiffness;self.joint_physics=joint_physics;self.bending=bending;self.gravity=gravity;self.point_grasp=point_grasp;self.length_slack=length_slack;self.paired_grasp=paired_grasp;self.paired_done=set();self.layer_visibility=layer_visibility;self.material_slack=material_slack;self.cell=cell;self.wa=arap;self.wd=data;self.wt=track;self.wp=pin;self.wrists=wrists
         self.cm=None;self.tracks={};self.gray={};self.pins={};self.closed={};self.counter=0;self.tick=-1
         self.events=[];self.last_metrics={};self.dense=dense;self.prev_views=None;self.coverage=coverage;self.predict=predict;self.prev_X=None;self.prev_G={};self.plane=plane;self.strain_limit=strain_limit;self.wrist_flow=wrist_flow;self.template=template;self.grasp_layers=grasp_layers;self.cot_weight=cot_weight;self.cot_anchor=cot_anchor;self.cot={};self.cot_checks=[];self.motion_scale=motion_scale;self.robust_depth=robust_depth
 
@@ -449,6 +449,8 @@ class CausalClothTracker:
         if self.ipc_contact and not hasattr(self,'ipc_state'):
             from .cloth_physics import IPCContact
             self.ipc_state=IPCContact(X,E,self.cm.F,min_distance=getattr(self,"contact_clearance",0.),stiffness=getattr(self,"contact_stiffness",1e9))
+        if self.ipc_contact:
+            self.ipc_state.solve_trace=[]  # diagnostics for this current frame
         pi,pt=self.update_pins(frame,X,v)
         hi,ht=pi,pt
         if len(pi):
@@ -554,6 +556,7 @@ class CausalClothTracker:
         for iteration in range(total_iters):
             R=self.rotations(X);edge=np.einsum('nij,nj->ni',.5*(R[E[:,0]]+R[E[:,1]]),self.e0);b=np.zeros((n,3));np.add.at(b,E[:,0],edge);np.add.at(b,E[:,1],-edge)
             w=np.full(n,.15);rhs=.15*prior+self.wa*b
+            surface_A=sp.csr_matrix((n,n))
             for c,tree in trees.items():
                 z=v[c];uv,depth=project(X,z['K'],z['T']);dd,inside=at_image(z['D'],uv)
                 # Hidden layer vertices must not chase the visible fold surface.
@@ -581,7 +584,11 @@ class CausalClothTracker:
                     if self.support_occlusion:eligible &= (dd<.08)|(depth<dd+.012)|mobile
                     elif not self.layer_visibility:eligible &= (dd<.08)|(depth<dd+.012)
                     jj=np.flatnonzero(eligible)
-                    if len(jj):
+                    if getattr(self,'coverage_surface',False):
+                        from .cloth_surface_fit import coverage_system
+                        H,bb=coverage_system(X,self.cm.F,z['P'],eligible,self.coverage_radius,self.coverage)
+                        surface_A+=H;rhs+=bb
+                    elif len(jj):
                         ds,ii=cKDTree(X[jj]).query(z['P']);good=ds<self.coverage_radius;ii=jj[ii[good]];Y=z['P'][good]
                         focus=getattr(self,'init_registration_focus',1.) if t==0 and getattr(self,'init_registration_iters',0) else 1.
                         importance=np.clip(ds[good]/.005,1,focus)
@@ -604,7 +611,7 @@ class CausalClothTracker:
                 w[under]+=1000;rhs[under]+=1000*ground
             if len(ti):np.add.at(w,ti,tw);np.add.at(rhs,ti,tw[:,None]*tt)
             if len(pi):np.add.at(w,pi,self.wp);np.add.at(rhs,pi,self.wp*pt)
-            A=self.wa*self.cm.L+sp.diags(w)
+            A=self.wa*self.cm.L+sp.diags(w)+surface_A
             if self.template=='shirt' and self.bending:
                 if not hasattr(self,'bend_matrix'):
                     # Checkpoint experiment: uniform interior curvature fallback.
@@ -652,6 +659,10 @@ class CausalClothTracker:
             _,_,_,checks,counts=self.track_features(v,X)
             if self.cot_weight:self.cot_constraints(frame,v,X)
         metrics=self.measure(v,checks,counts)
+        trace=getattr(getattr(self,'ipc_state',None),'solve_trace',[])
+        if trace:
+            metrics['constraint_solver']=dict(last=trace[-1],recent_steps=len(trace),
+                recent_moving_steps=sum(r['max_accepted_mm']>1e-5 for r in trace))
         if self.table_contact:metrics['min_table_clearance_mm']=float((X@np.r_[-self.table_plane[:2],1.]-self.table_plane[2]).min()*1000)
         metrics['global_slide']=recovery
         metrics['idle_gate']=idle;metrics['pins']=len(pi);metrics['ipc_intersections']=self.ipc_state.intersects(X) if self.ipc_contact else None;metrics['ipc_contacts']=self.ipc_state.last_contacts if self.ipc_contact else None;metrics['ipc_alpha']=self.ipc_state.last_alpha if self.ipc_contact else None;metrics['grasp_error_mm']=float(np.max(np.linalg.norm(X[pi]-pt,axis=1))*1000) if len(pi) else 0.;metrics['hard_grasp_error_mm']=float(np.max(np.linalg.norm(X[hi]-ht,axis=1))*1000) if len(hi) else 0.;self.prev_views=v
