@@ -24,6 +24,9 @@ def register_asset(views,path,table_plane=None):
     from pathlib import Path as FilePath
     with np.load(path) as z:
         V=z['V'].copy();F=z['F'].copy();poly=z['outline'].copy();pair=z['panel_pair'].copy();layers=int(z['layers'])
+        panel_vertices=int(z['panel_vertices']) if 'panel_vertices' in z else len(V)
+        if layers==2 and 'panel_vertices' not in z:
+            raise ValueError('A two-panel asset must record its front-panel vertex count')
         landmark_ids=z['landmark_ids'].copy() if 'landmark_ids' in z else None
         nonflat=bool(z['canonical_nonflat']) if 'canonical_nonflat' in z else False
     top=views['top']['P'];center=np.median(top[:,:2],axis=0)
@@ -46,8 +49,8 @@ def register_asset(views,path,table_plane=None):
     center3=np.r_[fit.x[1:],np.dot(plane[:2],fit.x[1:])+plane[2]+.002]
     V=V[:,0,None]*ex+V[:,1,None]*ey+V[:,2,None]*normal+center3
     p3=poly[:,0,None]*ex+poly[:,1,None]*ey+center3
-    if landmark_ids is None:landmark_ids=cKDTree(V).query(p3[[0,1,3,4,6,10,12,13]])[1]
-    return V,F,V.copy(),dict(layers=layers,panel_vertices=len(V),panel_pair=pair.tolist(),fit_parameters=[angle,1.,1.,*fit.x[1:]],fit_outline=p3[:,:2].tolist(),initial_landmark_ids=landmark_ids.tolist(),flat_rest=not nonflat,canonical_nonflat=nonflat,current_frame_only=True,offline_asset=str(path),asset_sha256=hashlib.sha256(FilePath(path).read_bytes()).hexdigest(),rigid_registration_only=True)
+    if landmark_ids is None:landmark_ids=cKDTree(V[:panel_vertices]).query(p3[[0,1,3,4,6,10,12,13]])[1]
+    return V,F,V.copy(),dict(layers=layers,panel_vertices=panel_vertices,panel_pair=pair.tolist(),fit_parameters=[angle,1.,1.,*fit.x[1:]],fit_outline=p3[:,:2].tolist(),initial_landmark_ids=landmark_ids.tolist(),flat_rest=not nonflat,canonical_nonflat=nonflat,current_frame_only=True,offline_asset=str(path),asset_sha256=hashlib.sha256(FilePath(path).read_bytes()).hexdigest(),rigid_registration_only=True)
 
 
 def make_panels(poly,cell=.012,thickness=.002,layers=2):
@@ -61,7 +64,15 @@ def make_panels(poly,cell=.012,thickness=.002,layers=2):
     boundary=np.array(boundary);lo=poly.min(0);hi=poly.max(0)
     xx,yy=np.meshgrid(np.arange(lo[0]+cell/2,hi[0],cell),np.arange(lo[1]+cell/2,hi[1],cell))
     grid=np.c_[xx.ravel(),yy.ravel()];grid=grid[Path(poly).contains_points(grid)]
-    grid=grid[cKDTree(boundary).query(grid)[0]>cell*.3]
+    # Distance to the boundary segments, not just their sampled endpoints.
+    # A grid vertex near the middle of a boundary edge otherwise survives and
+    # creates a sliver when boundary Steiner points are disabled below. Even a
+    # flat sheet can then violate the finite self-clearance used by tracking.
+    edge=np.roll(boundary,-1,axis=0)-boundary
+    delta=grid[:,None,:]-boundary[None,:,:]
+    alpha=np.clip(np.sum(delta*edge[None],axis=2)/np.sum(edge*edge,axis=1),0,1)
+    boundary_distance=np.linalg.norm(delta-alpha[:,:,None]*edge[None],axis=2).min(axis=1)
+    grid=grid[boundary_distance>cell*.3]
     import triangle
     segments=np.c_[np.arange(len(boundary)),np.roll(np.arange(len(boundary)),-1)]
     result=triangle.triangulate({'vertices':np.vstack([boundary,grid]),'segments':segments},f'pq25a{cell*cell*.45}Y')

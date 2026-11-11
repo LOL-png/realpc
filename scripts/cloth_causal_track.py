@@ -39,6 +39,10 @@ def main():
             setattr(tr,key,getattr(a,key))
         tr.wa=a.arap;tr.wd=a.data;tr.wt=a.track;tr.wp=a.pin
     first=len(XX)
+    if hasattr(tr,'template_info'):
+        # Resumed prefixes retain the same topology; make that explicit to
+        # downstream renderers instead of letting them assume two layers.
+        (out/'template_info.json').write_text(json.dumps(tr.template_info,indent=2))
     writer=cv2.VideoWriter(str(out/('both_cameras.mp4' if not first else f'both_cameras_from_{first:04d}.mp4')),cv2.VideoWriter_fourcc(*'mp4v'),15,(1280,840))
     for t in range(first,a.stop):
         p=Path(a.inputs)/'frames'/f'{t:04d}.npz'

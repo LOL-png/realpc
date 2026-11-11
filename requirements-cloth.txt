@@ -3,3 +3,6 @@
 triangle==20250106
 ipctk==1.6.1
 mujoco==3.17.0
+# Joint metric-constrained fitting (used by the conic cloth experiments).
+osqp==1.1.3
+clarabel==0.11.1

@@ -209,6 +209,12 @@ class CausalClothTracker:
             target=V.copy();distance,j=cKDTree(P[:,:2]).query(V[:,:2],k=12)
             w=np.exp(-(distance/.025)**2);target[:,2]=(w*P[j,2]).sum(1)/np.maximum(w.sum(1),1e-20)
             target[w.sum(1)<1e-8]=V[w.sum(1)<1e-8]
+            if self.shirt_layers==2 and self.back_on_table:
+                # The hidden panel is not a duplicate of the visible drape.
+                # Shared seam vertices remain attached to the front seed;
+                # free back-panel vertices start supported by the table.
+                back=np.arange(self.template_info['panel_vertices'],len(V))
+                target[back]=V[back]
             target=project_extension_endpoint(target,V,self.cm.E,limit=.002,sweeps=2400,two_sided=True)
             if self.table_contact:
                 normal=np.r_[-self.table_plane[:2],1.];height=target@normal-self.table_plane[2]
@@ -613,7 +619,11 @@ class CausalClothTracker:
                 target=ht if t==0 else dynamic_start+(ht-dynamic_start)*(iteration+1)/max(iters,1)
                 X=self.dynamics_state.advance(A,rhs,hi,target,duration=1/30 if t==0 else 1/30/max(iters,1),gain=(self.native_init_gain if t==0 and self.native_init_gain is not None else self.dynamics_gain))
             elif self.template=='shirt' and self.joint_physics:
-                if self.constraint_qp and self.qp_active:
+                # Initialization needs the same joint metric solve as a held
+                # fold. Newton followed by a hard edge filter can leave the
+                # clean sheet nearly flat before material tracks are bound.
+                use_qp=self.constraint_qp and (self.qp_active or (t==0 and self.constraint_conic))
+                if use_qp:
                     from .cloth_qp import step as joint_step
                 else:
                     from .cloth_physics import joint_step
@@ -621,7 +631,7 @@ class CausalClothTracker:
                 if self.cot_rays_only and self.ray_observations:
                     ri,off,centers,dirs,rw=[np.concatenate([obs[j] for obs in self.ray_observations]) for j in range(5)]
                     rays=(ri,centers-np.einsum('nij,nj->ni',R[ri],off),dirs,rw)
-                X=joint_step(X,self.cm.V0,E,A,rhs,hi,ht,self.strain_limit,self.strain_stiffness,self.ipc_state if self.ipc_contact else None,self.max_stretch,self.endpoint_projection,rays=rays,table_plane=getattr(self,'table_plane',None),metric_bounds=bool(self.shirt_asset),contact_projection=self.contact_projection,constraint_restore=self.constraint_restore,compression_soft=self.compression_soft,max_step=self.held_step if len(pi) else .025,**({"conic":self.constraint_conic} if self.constraint_qp and self.qp_active else {}))
+                X=joint_step(X,self.cm.V0,E,A,rhs,hi,ht,self.strain_limit,self.strain_stiffness,self.ipc_state if self.ipc_contact else None,self.max_stretch,self.endpoint_projection,rays=rays,table_plane=getattr(self,'table_plane',None),metric_bounds=bool(self.shirt_asset),contact_projection=self.contact_projection,constraint_restore=self.constraint_restore,compression_soft=self.compression_soft,max_step=self.held_step if len(pi) else .025,**({"conic":self.constraint_conic} if use_qp else {}))
             else:X=sla.spsolve(A.tocsc(),rhs)
             if self.strain_limit and not self.joint_physics and not self.dynamics:X=self.project_strain(X,hi,ht)
             if self.template=='shirt' and not self.ipc_contact and not self.dynamics:
