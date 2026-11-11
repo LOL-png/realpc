@@ -1,69 +1,30 @@
 # Shared scene pipeline validation — 2026-11-10
 
-## Configuration and causality
+The selected shared SAM interval is **1 processed frame**, for every object and both live inference and conversion. It has the highest equal-object mean silhouette overlap over the tested full episodes. N3 is better for cloth alone, and N10 is better for broom top-view overlap. Speed received no selection reward. See [all rate tables and references](benchmarks/sam_cadence_1110/README.md) and [decision and regressions](benchmarks/sam_cadence_1110/DECISION.md).
 
-One config: `configs/scene_pipeline_v2.json`. SAM interval **10 processed frames**, plus a centrally scheduled recovery after repeated tracking failures (ordinary cooldown8, urgent cooldown3). All objects use the same scene labels and refresh event. A refresh counts once per tick even though both camera memories update.
-
-`ScenePipeline.step(t, frames, q)` uses only the supplied current RGB-D/joints and previous state. Recorded joints are aligned by the fixed calibrated past lag. There is no backward smoothing or recorded-mask input. Offline calibration, library construction and evaluation masks are separate from runtime.
-
-Live/replay checks on12-frame prefixes of sweep, hang and greycloth produced identical masks and maximum point difference5.96e-8m. The check disables recording video/joint access inside the live step. The latest recovery configuration also passed sweep replay. Native registration threads and seeds are fixed to avoid symmetric-object initialization changes between runs.
-
-Four pipeline tests pass. Depth numerical/association, sparse-cloth mask and shirt constraint regression checks also pass. These checks establish implementation consistency, not physical tracking accuracy.
-
-## Why N=10
-
-Earlier full-episode cadence comparisons used the same camera-memory and mask-carry components before their integration into the single scene stream. They inform the choice; they are not claimed to be a full factorial benchmark of the final pipeline.
-
-| Refresh | Cloth SAM frames /453 | Cloth mask IoU top/side | Hang SAM frames /499 | Hang mug pass top/side |
+| SAM interval | Mean object/camera IoU | Hang fps | Sweep fps | Cloth fps |
 |---|---:|---:|---:|---:|
-| N5 + events |92|.926/.942|102|92.6%/100%|
-| N10 + events |49|.904/.920|53|91.6%/99.8%|
-| N30 + events |21|.875/.883|27|91.0%/99.6%|
-| Events only |6|.832/.849|15|91.0%/99.8%|
+| 1 (selected) | .8143 | 1.251 | .866 | .564 |
+| 2 | .7811 | 1.968 | 1.369 | .483 |
+| 3 | .8054 | 2.490 | 1.689 | .595 |
+| 10 | .7834 | 3.977 | 2.490 | .534 |
 
-Cloth agreement is measured against every-frame causal SAM reference masks, not independent labels. Hang pass is visible silhouette IoU>=0.5 against Q28 evaluation masks. N10 reduces calls substantially relative to N5 while retaining more cloth coverage than N30/events. The shared N applies to every task; actual calls include recovery.
+One full validation episode per task: hang 499, sweep 849, cloth 453 frames. These measurements do not establish dataset-wide performance. The box has no independent mask and is excluded from the macro score; raw-depth and fixed-reference consistency remain reported. The selected run invokes SAM on all frames. FPS is complete conversion walltime on the local RTX4070TiSUPER, not video playback speed; no real-time 30 Hz claim is made.
 
-## Whole-episode final-pipeline results
+## Causality and shared implementation
 
-Complete serial conversions:
+One config: configs/scene_pipeline_v2.json. ScenePipeline.step(t, frames, q) uses supplied current RGB-D and calibrated joints plus previous state. There is one segmentation stream and one forward SAM memory per camera. Rigid meshes, cloth deformation and robot FK consume this stream. Conversion saves the same outputs as live inference. Calibration and asset construction are offline; evaluation masks never enter runtime.
 
-| Task | Frames | SAM frames | SAM rate | Conversion seconds | Conversion fps |
-|---|---:|---:|---:|---:|---:|
-| hang |499|53|10.62%|123.9|4.03|
-| sweep |849|106|12.49%|342.4|2.48|
-| greycloth |453|47|10.38%|848.2|0.53|
+The four cadence configurations differ only in interval; implementation/assets hashes and reference-visible evaluation cohorts match. Robot transforms, joints and static points are identical across rates. All converted files passed realpc.dataset.load. Actual live/replay verification results are recorded with this benchmark.
 
-Times include initialization, packet reads, tracking, saving and load verification on the local RTX4070TiSUPER workstation. Bulk concurrent-job timings will be reported separately; playback fps is unrelated.
+## Remaining errors
 
-## Limits and QA interpretation
+N1 has a release-time broom error around frames 587–599 and a dustpan pose error at 750. Some depth metrics regress despite improved average silhouette overlap. The full tables and contact sheets retain these cases; a single cadence does not dominate every metric.
 
-Per-object tables separate independent Q28 masks (available only on selected episodes) from agreement with the pipeline's own propagated masks. High self-consistency cannot establish that an occluded mesh has the right pose. Contact sheets and both-camera videos remain necessary.
+The cloth second fold improves substantially versus N10: median visible depth 19.09/29.10→7.02/8.01mm, maximum grasp error 276.7→33.9mm. N3 is better on visible fold alignment but not the overall object score. None of these runs is a physically valid cloth reconstruction: N1 maximum local extension is 168.5%, and tracker intersection flags do not verify hidden layers or finite-thickness collisions. Fold frames remain approximate and excluded from the conservative cloth_valid gate. That saved gate is a dataset QA annotation, not a decision supplied to live tracking.
 
-The cloth fold is approximate. The preceding single-sheet run had no exported endpoint intersection flags, but worst local extension exceeded200% and second-fold grasp lag reached roughly227mm. Do not interpret no-crossing flags as no stretch, finite-thickness collision safety, or correct hidden material correspondence. Dataset fold frames remain marked approximate and excluded from `cloth_valid` from tick150 onward. The final shared run has 0/453 exported endpoint crossing flags, 168.5% maximum local extension, and 277 mm maximum second-fold grasp lag. This is not a successful physical fold reconstruction.
+Artifacts: /home/howardji/point_tracker/reports/SAM_ACCURACY_1110/. Historical N10 measurements are retained in [the previous validation](VALIDATION_N10_1110.md). The bulk 52-episode conversion and encoder audit remain cancelled;27 finished episodes and logs are preserved unchanged.
 
+## Verification of the selected setting
 
-The saved `cloth_valid` cutoff is a conservative dataset QA annotation for this recording, not a mask or decision fed into live tracking. Both adapters extract the same points. A reliable general runtime cloth-confidence gate is not yet established.
-
-The implementation is causal, but the measured throughput is below the recorded camera frame rate. No claim of real-time30Hz extraction is made. Live callers must preserve timestamp/joint alignment; silently skipping packets changes the tested temporal behavior.
-
-## Cloth comparison to the earlier two-layer52b run
-
-Both use the same evaluation depth/masks. Frame0 coverage top/side changes85.2%/92.0% to94.9%/91.6%; depth3.84/6.51mm to1.77/2.21mm. First-fold median depth improves18.65/16.76mm to7.80/7.71mm. The second fold regresses: silhouette IoU is about.26/.24 and depth19.1/29.1mm. This release improves initialization and the first fold; it does not solve the second fold.
-
-## Full independent rigid audit, episode0000
-
-Pass = visible silhouette IoU>=0.5 against Q28 masks; no evaluation labels enter extraction.
-
-| Object | Top pass | Side pass | Median IoU top/side |
-|---|---:|---:|---:|
-| Broom |97.5%|96.8%|.801/.813|
-| Debris |90.6%|90.7%|.843/.857|
-| Dustpan |94.8%|99.9%|.876/.881|
-| Mug |92.8%|99.6%|.862/.831|
-| Stand |98.2%|100%|.833/.885|
-
-The tray has no independent Q28 label. Its dataset-wide table uses stream consistency and visual QA instead. Independent masks exist only on selected episodes; do not extrapolate these percentages to all50 sweep episodes.
-
-Artifacts: `/home/howardji/point_tracker/reports/ASTRA_UNIFIED_1110/validation/` contains full both-camera videos for sweep/hang/greycloth, cloth clean-template/first-fit images, per-frame measurements and contact sheets. Dataset-wide outputs and the encoder audit will be added after the full conversion.
-
-Dataset-wide QA also reports raw-depth agreement separately from silhouette scores. It excludes closer occluders and requires at least60 comparable depth pixels. Its diagnostic gate is median absolute depth error<=10mm and free-space fraction<=20% at a15mm tolerance. This is not semantic pose ground truth: depth artifacts, shape error and calibration error all affect it. The initial sweep-7 check exposes residual dustpan disagreement (roughly8–12mm on most sampled side views,21mm at the last frame), despite useful silhouette alignment. These failures are retained in the audit.
+Four pipeline tests pass with episode data supplied (no skips). Actual 12-frame live/replay checks pass for hang, sweep and cloth with recorded video/joint reads blocked inside the live step. Saved masks match exactly and maximum point difference is 5.96e-8m. Each prefix uses 12 SAM refreshes. All 12 benchmark outputs passed load verification. See [verification records](benchmarks/sam_cadence_1110/verification.json).

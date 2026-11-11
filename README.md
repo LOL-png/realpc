@@ -2,11 +2,11 @@
 
 The current entry point is `ScenePipeline.step(t, frames, q)` in `realpc/scene_pipeline.py`. Live inference and training-data conversion call this same function. It produces fixed-identity robot, rigid-object, static-scene and cloth points from current RGB-D and calibrated joints.
 
-The shared policy is **SAM every 10 processed frames, plus failures**. Whole-episode checks are complete for sweep, hang and cloth; dataset-wide QA follows conversion. See [validation and limitations](docs/VALIDATION.md) for alignment, speed and the unresolved second cloth fold.
+The shared policy is **SAM every processed frame for every object**. This gave the highest equal-object mean silhouette overlap in full-episode comparisons of intervals 1, 2, 3 and 10. It does not win every object or depth metric. See [validation and limitations](docs/VALIDATION.md) for the complete accuracy/speed comparison and unresolved cloth deformation errors. The 52-episode conversion remains cancelled; completed outputs are preserved.
 
 ## What runs
 
-1. One scene segmentation stream carries object masks forward using current depth, mesh predictions and optical flow. One shared SAM2 model refreshes all objects on the same schedule, with one forward memory per camera. Skipped frames never enter SAM.
+1. One scene segmentation stream refreshes all objects using one shared SAM2 model and one forward memory per camera. The selected schedule refreshes every frame. With a larger configured interval, current depth, mesh predictions and optical flow carry masks between refreshes; skipped frames never enter SAM.
 2. Rigid objects use depth/mesh fitting and gripper FK when held. The cloth uses a clean shirt template, causal point tracks and a deformable mesh. Robot geometry comes from FK.
 3. Fixed mesh/link samples produce the point cloud. The recording adapter saves the same output that a live consumer receives.
 
@@ -57,7 +57,7 @@ Supply consecutive ticks starting at zero and current top/side RGB-D. Wrist RGB-
 ## Validation and limits
 
 - `tests/check_scene_live_parity.py` compares live packets with converted points and masks while blocking recording access inside the live pipeline.
-- Cloth folds remain **approximate**: visible-surface alignment does not establish correct hidden material correspondence. The second fold still has large grasp lag and excessive stretch. Fold frames are marked separately and excluded from the conservative `cloth_valid` gate.
+- Cloth folds remain **approximate**: every-frame SAM reduces the second-fold tracking loss, but visible-surface alignment does not establish correct hidden material correspondence. Excessive stretch and residual grasp error remain. Fold frames are marked separately and excluded from the conservative `cloth_valid` gate.
 - Dark/occluded rigid surfaces, fast motion and imperfect wrist calibration remain difficult. SAM recovery cannot correct a wrong mesh or calibration.
 - Playback frame rate is not extraction throughput. Final timings must include mask propagation, tracking and initialization; report the actual fraction of frames using SAM.
 
