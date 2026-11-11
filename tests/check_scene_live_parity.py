@@ -45,6 +45,8 @@ def forbidden(*args, **kwargs):
 read_current_q = cal.q_at
 cal.q_at = forbidden
 ep.video = forbidden
+ep.frame = forbidden
+ep.cam_pose = forbidden
 maximum = 0.
 for t in range(min(a.frames, len(d['ticks']))):
     frames = {}
@@ -53,7 +55,15 @@ for t in range(min(a.frames, len(d['ticks']))):
         ok, image = videos[c].read()
         assert ok
         frames[c] = depth.astype(np.float32) * float(ep.meta['depth_scale'][c]), image
-    row = pipe.step(t, frames, {side: read_current_q(ep, side, cal.robot_tick(ep, 'top', t)) for side in ('left', 'right')})
+    joint_tick = cal.robot_tick(ep, 'top', t)
+    assert joint_tick <= t, 'Input adapter requested future joints'
+    joints = {side: read_current_q(ep, side, joint_tick) for side in ('left', 'right')}
+    recorded_low = ep.low
+    ep.low = None  # Direct recorded-array reads are forbidden inside live step too.
+    try:
+        row = pipe.step(t, frames, joints)
+    finally:
+        ep.low = recorded_low
     points = pipe.points(row)
     finite = np.isfinite(points) & np.isfinite(d['points'][t])
     error = float(np.max(np.abs(points[finite] - d['points'][t][finite])))
@@ -83,5 +93,7 @@ report = dict(task=task, frames=pipe.tick + 1, maximum_point_difference_m=maximu
               recorded_joint_and_video_access_blocked=True, config_sha256=pipe.config_hash,
               sam_frames=len(pipe.masks.events), exact_saved_masks=True)
 report['cloth_quality_flags_checked'] = 'cloth_approximate' in d
+report['recorded_low_dim_access_blocked_during_step'] = True
+report['recorded_frame_and_camera_pose_access_blocked'] = True
 Path(a.out).write_text(json.dumps(report, indent=2))
 print('PASS', report)
