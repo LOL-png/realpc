@@ -12,9 +12,12 @@ for n in [1,2,3,10]:
         qa=folder/'data'/task/'episode_0000_qa.json'
         if not qa.exists():continue
         q=json.loads(qa.read_text());seg=q['pipeline']['segmentation']
+        assert q['pipeline']['causal'] and q['pipeline']['shared_live_conversion_step']
+        assert seg['one_shared_stream'] and seg['causal']
+        if n in (1,2,3):assert seg['sam_frames']==(q['ticks']+n-1)//n
         entry['tasks'][task]=dict(frames=q['ticks'],seconds=q['seconds'],end_to_end_fps=q['ticks']/q['seconds'],
             step_fps=q['pipeline']['fps'],sam_frames=seg['sam_frames'],sam_fraction=seg['sam_frame_rate'],
-            config_sha256=q['config_sha256'],load_verified=q['load_verified'])
+            config_sha256=q['config_sha256'],implementation_sha256=q['implementation_sha256'],load_verified=q['load_verified'])
         audit=folder/'audit'/task/'episode_0000'/('camera_audit.json' if task=='greycloth' else 'metrics.json')
         if not audit.exists():continue
         d=json.loads(audit.read_text())
@@ -58,6 +61,14 @@ for n in [1,2,3,10]:
     results[n]=entry
 complete=[n for n in results if results[n]['complete']]
 if len(complete)==4:
+    for task in ['hang','sweep','greycloth']:
+        assert len({results[n]['tasks'][task]['implementation_sha256'] for n in complete})==1, 'Implementation changed: '+task
+    configurations=[]
+    for n in complete:
+        cfg=json.loads((root/f'n{n}'/'config.json').read_text())
+        assert cfg['segmentation'].pop('interval')==n
+        configurations.append(cfg)
+    assert all(c==configurations[0] for c in configurations), 'Changes beyond SAM cadence'
     for name in objects:
         cohorts=[set(series[n][name]) for n in complete]
         assert all(x==cohorts[0] for x in cohorts),'Different reference-visible cohorts: '+name
@@ -82,7 +93,10 @@ for name in objects:
 lines+=['','| End-to-end fps | Every1 | Every2 | Every3 | Every10 |','|---|---|---|---|---|']
 for task in ['hang','sweep','greycloth']:
     lines.append('| '+task+' | '+' | '.join(fmt(results[n]['tasks'].get(task,{}).get('end_to_end_fps')) for n in [1,2,3,10])+' |')
-lines+=['','Actual SAM fractions, per-view IoU>=0.5 pass rates, depth, and step-only fps are in [CSV](per_object_alignment.csv) and [JSON](summary.json). Robot/table geometry does not depend on SAM cadence.','', 'Accuracy ranking (completed rates): '+str(ranking)+'. Selection is pending visual/depth review.']
+lines+=['','Actual SAM fractions, per-view IoU>=0.5 pass rates, depth, and step-only fps are in [CSV](per_object_alignment.csv) and [JSON](summary.json). Robot/table geometry does not depend on SAM cadence.',
+        'A SAM refresh also invokes rigid silhouette refinement in the existing shared pipeline; this comparison measures the complete refresh policy.',
+        'N10 cloth reuses the completed full control after exact source/config/asset hashes and output checksum verification; the other measured conversions are fresh.',
+        '', 'Accuracy ranking (completed rates): '+str(ranking)+'. Selection is pending visual/depth review.']
 (out/'README.md').write_text('\n'.join(lines)+'\n')
 print('Completed accuracy ranking',[(n,results[n]['macro_common_iou']) for n in ranking])
 print('Ready objects',{n:list(r['objects']) for n,r in results.items()})
