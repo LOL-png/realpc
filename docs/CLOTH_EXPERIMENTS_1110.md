@@ -109,3 +109,15 @@ The175lift test with12steps of5mm takes6.27s, reaches the hard contact to numeri
 precision (8.79mm maximum across all soft grasp-region points), and retains
 edge ratios[.98200004,1.019000001]. Two-repeat regression passes exactly.
 Trial127 starts before acquisition with this solver; it is not yet promoted.
+
+## End-of-loop assessment
+Trial127 is rejected after187frames: contact centres track, but the selected
+material correspondence pulls the wrong surface and visible alignment worsens.
+The completed453-frame120comparison is also a visible-fit failure despite
+bounded strain and zero exported crossings. No candidate is promoted. The
+current report contains full per-frame camera metrics and video; hidden layers
+are not evaluated. Remaining work is joint rest-pattern/material registration
+against multi-view evidence, not a claim that solver/contact accuracy alone
+fixes the shirt. Cancelled dataset/QA/encoder work stays cancelled.
+`cloth_grasp_feasibility.py` reproduces the necessary geodesic/contact bound,
+checks only frames before release, and separates hard centres from soft regions.
