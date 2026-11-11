@@ -1,5 +1,6 @@
 """Actual live packets must reproduce converted poses, points and masks."""
 import argparse
+import os
 import json
 from pathlib import Path
 import sys
@@ -23,7 +24,7 @@ a = p.parse_args()
 path = Path(a.converted)
 d = load(str(path))
 task, episode = str(d['task']), str(d['episode'])
-ep = Episode(f'/home/howardji/data_ext/agentwm_probe/hf/{task}/{episode}')
+ep = Episode(str(Path(os.environ.get('REALPC_EPISODES_ROOT','/home/howardji/data_ext/agentwm_probe/hf')) / task / episode))
 config = json.loads(path.with_name(path.stem + '_config.json').read_text())
 library = ROOT / 'assets/objects_v3' / task
 # The live side receives only static setup files, not an Episode object.

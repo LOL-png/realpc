@@ -40,6 +40,7 @@ def main():
     p.add_argument('--every', type=int, default=100)
     p.add_argument('--episodes', nargs='*', help='Optional task/episode names')
     p.add_argument('--example-videos', action='store_true')
+    p.add_argument('--all-videos', action='store_true', help='Both-camera video for every selected episode')
     p.add_argument('--cloth-reference-inputs', help='Current RGB-D/FK/mask packets, for QA only')
     a = p.parse_args()
     dataset, output = Path(a.dataset), Path(a.out)
@@ -58,7 +59,7 @@ def main():
         data = np.load(path)
         count = len(data['ticks'])
         picks = np.unique(np.linspace(0, count - 1, 5).astype(int)).tolist()
-        video = a.example_videos and episode == 'episode_0000'
+        video = a.all_videos or (a.example_videos and episode == 'episode_0000')
         if task != 'greycloth':
             episode_coverage[key] = {}
             for index, object_name in enumerate(data['obj_names']):
