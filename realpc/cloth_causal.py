@@ -629,7 +629,10 @@ class CausalClothTracker:
                 # Initialization needs the same joint metric solve as a held
                 # fold. Newton followed by a hard edge filter can leave the
                 # clean sheet nearly flat before material tracks are bound.
-                use_qp=self.constraint_qp and (self.qp_active or (t==0 and self.constraint_conic))
+                # A configured metric-constrained solve also applies to free
+                # cloth. Switching back to Newton after t0 made registration
+                # and the pre-grasp prefix use different feasibility solvers.
+                use_qp=self.constraint_qp
                 if use_qp:
                     from .cloth_qp import step as joint_step
                 else:
