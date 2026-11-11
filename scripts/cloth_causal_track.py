@@ -65,7 +65,12 @@ def main():
             if t%25==0:(out/'pipeline_summary.json').write_text(json.dumps(pipeline.summary(),indent=2))
         else:X,m,v=tr.step(t,frame,iters=a.iters)
         XX.append(X.copy());metrics.append(m)
-        (out/'progress.json').write_text(json.dumps(dict(t=t,elapsed_s=time.time()-start,grasp_mm=m['grasp_error_mm'],mesh_mm=m['mesh_to_surface_med_mm'])))
+        (out/'progress.json').write_text(json.dumps(dict(t=t,elapsed_s=time.time()-start,
+            grasp_mm=m['grasp_error_mm'],hard_grasp_mm=m.get('hard_grasp_error_mm'),
+            mesh_mm=m['mesh_to_surface_med_mm'],max_edge_strain=m.get('max_edge_strain'),
+            intersects=m.get('ipc_intersections'),constraint_solver=m.get('constraint_solver'))))
+        if tr.events and tr.events[-1]['t']==t:
+            (out/'grasp_events.json').write_text(json.dumps(tr.events))
         rows=[]
         for c in ['top','side']:
             im=frame[c+'_rgb'];ov=overlay(im,X,tr.cm.E,v[c]['K'],v[c]['T'],frame[c+'_depth'])
