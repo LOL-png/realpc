@@ -56,6 +56,8 @@ def main():
         outs.append((nm, info["A"][:, None] + dec, E, e))
     X = np.concatenate([info["X"][:, :16], info["A"][:, None], info["X"][:, 16:]], 1)        # GT incl. t0
     eg = info["eval_group"]
+    moving_group = 4 if (eg == 4).any() else 3
+    moving_name = "cloth" if moving_group == 4 else "moving"
     cols = np.array([COL[g] for g in eg], np.uint8)
     focus = np.nanmedian(X[eg >= 2, 16], 0) if (eg >= 3).sum() < 20 else np.nanmedian(X[eg >= 3, 16], 0)
     Tv, Kv = virtual_cam(focus, dist=0.9, elev=45, azim=200, f=650, W=480, H=400)
@@ -72,7 +74,9 @@ def main():
             im = np.full((400, 480, 3), 20, np.uint8)
             draw_points(im, Dk[ok, s], cols[ok], Tv, Kv, r=1)
             Ek = np.concatenate([E[:, :16], np.zeros((len(E), 1)), E[:, 16:]], 1)[:, s]
-            txt = f"{nm}  moving {np.nanmean(Ek[eg == 3]) * 1000:.1f} mm  static {np.nanmean(Ek[eg == 2]) * 1000:.1f} mm"
+            moving_error = np.nanmean(Ek[eg == moving_group]) * 1000 if (eg == moving_group).any() else None
+            moving_text = f"{moving_error:.1f} mm" if moving_error is not None else "n/a"
+            txt = f"{nm}  {moving_name} {moving_text}  static {np.nanmean(Ek[eg == 2]) * 1000:.1f} mm"
             cv2.putText(im, txt, (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1, cv2.LINE_AA)
             panels.append(im)
         nm, D, E, e = outs[-1]
@@ -84,7 +88,7 @@ def main():
         panels.append(em)
         frame = np.concatenate(panels, 1)
         bar = np.zeros((30, frame.shape[1], 3), np.uint8)
-        cv2.putText(bar, f"{a.title}  step {s - 16:+d} (t0 = 0)   colours: yellow gripper, orange robot, grey static, blue moving",
+        cv2.putText(bar, f"{a.title}  step {s - 16:+d} (t0 = 0)   colours: yellow gripper, orange robot, grey static, blue moving, magenta cloth",
                     (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
         frame = np.concatenate([bar, frame], 0)
         if wr is None:

@@ -28,6 +28,8 @@ ap.add_argument("--fb_ckpt", default=None); ap.add_argument("--rc_ckpt", default
 ap.add_argument("--n_hist", type=int, default=16); ap.add_argument("--n_fut", type=int, default=32); ap.add_argument("--stride", type=int, default=48)
 ap.add_argument("--tok", nargs="+", choices=["default", "segments"], default=["default", "segments"])
 ap.add_argument("--fb-only", action="store_true", help="Skip RC-sized analytic/learned variants")
+ap.add_argument("--min-frame", type=int, help="Inclusive first frame; retain only windows fully inside this cohort")
+ap.add_argument("--max-frame", type=int, help="Inclusive last frame; retain only windows fully inside this cohort")
 a = ap.parse_args()
 sp, sl = _load_plwm()
 
@@ -93,6 +95,12 @@ for cp in a.converted:
     tr = TracksView(d)
     T = tr.pos.shape[1]
     k0s = list(range(a.n_hist, T - a.n_fut - 1, a.stride))
+    if a.min_frame is not None:
+        k0s = [k0 for k0 in k0s if k0 - a.n_hist >= a.min_frame]
+    if a.max_frame is not None:
+        k0s = [k0 for k0 in k0s if k0 + a.n_fut <= a.max_frame]
+    if not k0s:
+        raise ValueError(f"No complete windows for {cp} with the requested cohort")
     key = f"{d['task']}/{d['episode']}"
     out[key] = {}
     for nm, mk, npts in aes:
@@ -113,7 +121,8 @@ for cp in a.converted:
                     agg[gname] = {"mean_mm": float(np.mean(v)), "p90_mm": float(np.mean(p)) if p else None, "windows": len(v)}
             out[key][f"{nm}/{tok}"] = agg
             print(key, nm, tok, {k: round(v["mean_mm"], 2) for k, v in agg.items()}, flush=True)
-    # Save after each episode so a long dataset audit is resumable.
+    # Retain completed episodes if interrupted; evaluate remaining episodes into
+    # a separate output before merging results (this command does not auto-resume).
     from pathlib import Path
     output = Path(a.out)
     temp = output.with_suffix(".tmp.json")
