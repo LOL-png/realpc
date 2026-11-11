@@ -4,7 +4,7 @@ The robot supplies two RGB-D views and joint angles. Before processing, we prepa
 
 Every frame goes through one segmentation stream. The selected accuracy-first setting runs SAM on every frame for the whole scene. There is one SAM memory per camera, shared across the scene's objects; the cloth tracker does not run a separate SAM job. Larger intervals remain available: depth, optical flow and predicted geometry carry masks between scheduled or failure-triggered refreshes.
 
-The rigid trackers fit their meshes to the current depth. Held objects also use gripper motion. The cloth tracker deforms the shirt template using both views, point tracks and grasp constraints. FK places the robot links. Fixed samples on these surfaces become the output point cloud, preserving sample identity over time.
+The rigid trackers fit their meshes to the current depth. At initialization, sufficient masked depth is registered against samples of the actual mesh; an older partial construction scan supplies the colour-only fallback when masked depth is insufficient. Held objects also use gripper motion. The cloth tracker deforms the shirt template using both views, point tracks and grasp constraints. FK places the robot links. Fixed samples on these surfaces become the output point cloud, preserving sample identity over time.
 
 Live inference calls `ScenePipeline.step` once with the current images and calibrated joints. Training conversion reads the next recorded packet and calls exactly the same function. It additionally saves poses, points, masks and QA metadata. It does not smooth backward, look ahead, or consume evaluation masks. Calibration and asset building can use offline recordings; that work is not repeated inside the causal step.
 
