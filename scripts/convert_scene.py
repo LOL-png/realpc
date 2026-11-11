@@ -28,7 +28,8 @@ def atomic_npz(path, **values):
     tmp.replace(path)
 
 
-def convert_episode(ep_path, out_root, config, assets, calibration, stop=None, skip=False, save_masks=False):
+def convert_episode(ep_path, out_root, config, assets, calibration, stop=None, skip=False, save_masks=False,
+                    cloth_preview_every=0):
     start = time.perf_counter()
     ep = Episode(str(ep_path))
     dest = out_root / ep.task
@@ -68,6 +69,8 @@ def convert_episode(ep_path, out_root, config, assets, calibration, stop=None, s
     values = dict(robot_T=[], q_left=[], q_right=[])
     obj = {key: [] for key in ('obj_T', 'obj_res', 'obj_held', 'obj_valid', 'obj_support', 'obj_mode')}
     cloth_points, cloth_observed, cloth_metrics, cloth_X = [], [], [], []
+    cloth_valid, cloth_approximate = [], []
+    preview = dest / (ep.name + '_preview')
     used_masks = {c: [] for c in ('top', 'side')}
     input_seconds = []
     try:
@@ -101,10 +104,27 @@ def convert_episode(ep_path, out_root, config, assets, calibration, stop=None, s
                 cloth_observed.append(row['cloth_observed'])
                 cloth_metrics.append(row['cloth_metrics'])
                 cloth_X.append(row['cloth_vertices'])
+                cloth_valid.append(row['cloth_valid'])
+                cloth_approximate.append(row['cloth_approximate'])
+                if cloth_preview_every:
+                    # Diagnostic output only: no cached packet is read by step.
+                    packets = preview / 'inputs' / 'frames'
+                    packets.mkdir(parents=True, exist_ok=True)
+                    atomic_npz(packets / f'{t:04d}.npz', **pipeline.last_packet)
+                    if t % cloth_preview_every == 0 or t == count - 1:
+                        atomic_npz(preview / 'mesh.npz', X=np.array(cloth_X), V0=pipeline.cloth.cm.V0,
+                            F=pipeline.cloth.cm.F, sample_faces=pipeline.cloth.cm.sf,
+                            sample_bary=pipeline.cloth.cm.sb, ticks=np.arange(t+1), causal=True,
+                            partial=t+1<count)
+                        (preview / 'metrics.json').write_text(json.dumps(cloth_metrics))
+                        (preview / 'template_info.json').write_text(json.dumps(pipeline.cloth.template_info, indent=2))
             if t % 50 == 0:
                 progress=dict(tick=t,elapsed_seconds=time.perf_counter()-start,
                     sam_frames=len(pipeline.masks.events),config_sha256=config_hash,
                     health=pipeline.masks.health,latest_events=pipeline.masks.events[-2:])
+                if 'cloth_metrics' in row:
+                    progress['cloth_metrics'] = row['cloth_metrics']
+                    progress['cloth_grasp_events'] = pipeline.cloth.events
                 progress_path=dest/(ep.name+'_progress.json')
                 temp=progress_path.with_suffix('.tmp.json');temp.write_text(json.dumps(progress,indent=2));temp.replace(progress_path)
                 print(ep.task, ep.name, t, 'seconds', round(time.perf_counter() - start, 1),
@@ -145,9 +165,9 @@ def convert_episode(ep_path, out_root, config, assets, calibration, stop=None, s
             data['low_' + key] = value[:count]
     if cloth_points:
         data.update(cloth_points=np.stack(cloth_points, axis=1), cloth_observed=np.stack(cloth_observed, axis=1),
-            cloth_valid=np.array([t < 150 and np.isfinite(cloth_points[t]).all() for t in range(count)]),
-            cloth_fold_approximate=np.arange(count) >= 150, cloth_variant='shared_scene_deformable_v2',
-            cloth_coordinate_frame='v3_world', cloth_geometry_observed_only=True)
+            cloth_valid=np.asarray(cloth_valid, bool), cloth_approximate=np.asarray(cloth_approximate, bool),
+            cloth_fold_approximate=np.asarray(cloth_approximate, bool), cloth_variant='shared_scene_deformable_v2',
+            cloth_coordinate_frame='v3_world', cloth_geometry_observed_only=False)
         atomic_npz(dest / (ep.name + '_cloth_mesh.npz'), X=np.array(cloth_X), V0=pipeline.cloth.cm.V0,
                    F=pipeline.cloth.cm.F, sample_faces=pipeline.cloth.cm.sf, sample_bary=pipeline.cloth.cm.sb,
                    ticks=np.arange(count), causal=True)
@@ -186,13 +206,15 @@ def main():
     parser.add_argument('--stop', type=int)
     parser.add_argument('--skip-existing', action='store_true')
     parser.add_argument('--save-masks', action='store_true')
+    parser.add_argument('--cloth-preview-every', type=int, default=0,
+                        help='Validation only: save current packets and a cloth prefix every N frames')
     args = parser.parse_args()
     config = load_scene_config(args.config)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     for episode in args.episodes:
         convert_episode(Path(episode), out, config, Path(args.assets), args.calibration,
-                        args.stop, args.skip_existing, args.save_masks)
+                        args.stop, args.skip_existing, args.save_masks, args.cloth_preview_every)
     (out / 'schema.json').write_text(json.dumps(SCHEMA, indent=2))
     records = [json.loads(p.read_text()) for p in sorted(out.glob('*/*_qa.json'))]
     (out / 'manifest.json').write_text(json.dumps(dict(pipeline='shared_scene_v2', episodes=records), indent=2))

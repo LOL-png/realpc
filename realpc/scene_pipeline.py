@@ -131,6 +131,11 @@ class ScenePipeline:
                 observed |= inside & (depth > .08) & (abs(z - depth) < .012)
             out.update(cloth_points=samples.astype(np.float32), cloth_observed=observed,
                        cloth_metrics=metric, cloth_vertices=X.copy(), cloth_faces=self.cloth.cm.F)
+            from .cloth_quality import frame_quality
+            quality = frame_quality(samples, metric, self.config)
+            metric['quality'] = quality
+            out.update(cloth_valid=quality['valid'], cloth_approximate=quality['approximate'],
+                       cloth_quality=quality)
             if t == 0:
                 from scipy.spatial import cKDTree
                 P, C = self.converter.static

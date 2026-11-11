@@ -67,6 +67,9 @@ for t in range(min(a.frames, len(d['ticks']))):
         print('LOCAL SAMPLE DIFFERENCES',{o.name:float(np.max(abs(o.samples-d['obj_local'][d['obj_index']==i]))) for i,o in enumerate(conv.objs)},flush=True)
     assert error < 1e-4, (task, t, error)  # <=0.1mm after rigid rotation and point expansion
     assert row['max_observed_tick'] == t
+    if 'cloth_approximate' in d:
+        assert row['cloth_valid'] == bool(d['cloth_valid'][t]), (task, t, 'cloth_valid')
+        assert row['cloth_approximate'] == bool(d['cloth_approximate'][t]), (task, t, 'cloth_approximate')
     for cam in ('top', 'side'):
         mask_path = path.with_name(path.stem + '_' + cam + '_masks.npz')
         if mask_path.exists():
@@ -79,5 +82,6 @@ for v in videos.values():
 report = dict(task=task, frames=pipe.tick + 1, maximum_point_difference_m=maximum,
               recorded_joint_and_video_access_blocked=True, config_sha256=pipe.config_hash,
               sam_frames=len(pipe.masks.events), exact_saved_masks=True)
+report['cloth_quality_flags_checked'] = 'cloth_approximate' in d
 Path(a.out).write_text(json.dumps(report, indent=2))
 print('PASS', report)
