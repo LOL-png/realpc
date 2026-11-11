@@ -18,7 +18,7 @@ The shared policy is **SAM every processed frame for every object**. This gave t
 - Robot: `configs/yam_bimanual.json` and the YAM URDF/link meshes.
 - Rigid library: `assets/objects_v3/<task>/`, including the sweep tray, four-peg stand and asymmetric ear-shaped mug handle.
 - Cloth: clean single-sheet shirt outline fitted to frame 0; topology and material sample IDs persist afterward.
-- Models: SAM2 small and online CoTracker under `.model_cache/` (the local shared config points to the installed cache). Model weights and recordings are not committed.
+- Models: SAM2 small and online CoTracker under `.model_cache/`. SAM uses the checkpoint in the shared config; CoTracker defaults to the repo cache (`REALPC_MODEL_CACHE` can override its root). Its checkout is `hub/facebookresearch_co-tracker_main/` and checkpoint is `hub/checkpoints/scaled_online.pth`. Model weights and recordings are not committed.
 
 Install `requirements.txt` and `requirements-cloth.txt`, plus the matching PyTorch/PyTorch3D, Open3D and SAM2 packages. `ffmpeg` must be on PATH. The tested local environment is `/home/howardji/miniconda3/envs/myenv`; its Open3D build needs the system `libstdc++` preload below.
 

@@ -5,11 +5,14 @@ Here partial windows contain only observed frames (the model repeats CURRENT
 image for padding), and online memory is committed only at a complete window.
 Already emitted tracks are never revised. Different cameras share weights.
 """
-import copy,sys
+import copy,os,sys
+from pathlib import Path
 import cv2,numpy as np,torch
 
 class CausalClothCoTracker:
-    def __init__(self,root='/home/howardji/realpc/.model_cache',reseed=128):
+    def __init__(self,root=None,reseed=128):
+        root=str(Path(root or os.environ.get('REALPC_MODEL_CACHE',
+            Path(__file__).resolve().parents[1]/'.model_cache')).expanduser())
         sys.path.insert(0,root+'/hub/facebookresearch_co-tracker_main')
         from cotracker.predictor import CoTrackerOnlinePredictor
         self.model=CoTrackerOnlinePredictor(checkpoint=root+'/hub/checkpoints/scaled_online.pth').cuda().eval()
