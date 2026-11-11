@@ -62,6 +62,46 @@ Supply consecutive ticks starting at zero and current top/side RGB-D. Wrist RGB-
 - Dark/occluded rigid surfaces, fast motion and imperfect wrist calibration remain difficult. SAM recovery cannot correct a wrong mesh or calibration.
 - Playback frame rate is not extraction throughput. Final timings must include mask propagation, tracking and initialization; report the actual fraction of frames using SAM.
 
-Older conversion/segmentation scripts are retained for reproducible ablations, not as alternate production paths. Their former documentation is in [legacy pipelines](docs/LEGACY_PIPELINES.md).
+## One GPU job for the complete release
 
-The selected configuration includes the bounded cloth tracker and adaptive contact refinement validated in [the current report](docs/VALIDATION.md). Experimental configurations and historical runs remain available for comparison; production live use and conversion share the single default config.
+See [cluster staging, submission and recovery](docs/CLUSTER.md). One sequential
+Slurm allocation runs environment checks, tests, seven validation episodes,
+live/conversion parity, all 52 conversions, per-episode videos and quality flags,
+manifest/checksum verification, and the zero-shot learned/analytic encoder audit.
+Completed stages resume from fingerprinted markers; no nested jobs are submitted.
+
+```bash
+sbatch scripts/cluster/run.sbatch
+```
+
+The staged run must have `READY` before submission/release. The provided launcher
+uses one Ampere-or-newer GPU on `sc-loprio`, account `viscam`, 96 GB RAM, and a
+48-hour limit. Exclude currently bad nodes at submission as described in the guide.
+Orion inputs, environment and outputs share a 50 GB ceiling; a 47 GB guard leaves
+headroom. Finished outputs can be copied to external storage without recomputation.
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests/test_*.py
+python tests/check_scene_live_parity.py --converted /path/to/dataset_v2/sweep/episode_0000.npz --frames 32 --out parity.json
+```
+
+Set `REALPC_EPISODES_ROOT` for parity and QA, `REALPC_MASKS_ROOT` for optional
+independent QA masks, and `PLWM_SE3_SRC` for the external SE(3) encoder source.
+The cluster driver sets these consistently. Do not mistake the round-trip error
+of extracted points for alignment accuracy against camera observations.
+
+## Repository scope
+
+`realpc/` contains the shared runtime and its geometry helpers; `scripts/` has
+conversion, QA, rendering and encoder entry points; `configs/` and `assets/`
+contain the selected setup; `tests/` checks geometry, flags and live parity.
+The historical experiment launchers and competing conversion scripts are preserved
+on `archive/experiments-20261111` and tag `realpc-before-cleanup-20261111`, and have
+been removed from this branch. Compatibility helpers required by the current
+runtime/tests remain. Weights, recordings, output datasets and credentials are
+external to the repository.
+
+The earlier 18-test and parity results are recorded in [preflight](docs/PREFLIGHT_1111.md).
+The new cluster run records its own tests and full-dataset results; pending results
+are not certified by the code release tag. Cloth is always approximate, with
+per-frame support, strain, intersection and contact flags retained in the dataset.

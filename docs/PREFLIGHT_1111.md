@@ -19,4 +19,8 @@ Corrected full sweep20 and sweep30 are complete and their both-camera sheets hav
 
 The remaining corrected episodes are pending after two system-wide RAM exhaustion events. The second occurred with only two conversion jobs; the kernel snapshot contains 1,321 AWS processes belonging to a separate workload. Finished outputs and failure logs are preserved. Recovery must keep conversion concurrency bounded and audits serial, and control the external memory pressure before another long run.
 
-Master and its original release tag remain unchanged until validation completes. Evidence is under `point_tracker/reports/REALPC_UNIFIED_1110/preflight_fix/`, `meshinit_preflight5/`, `meshinit_common_masks/` and `recovery_1111/`. The partial paired-frame comparison explicitly distinguishes newly visible depth pixels from the common comparison cohort. The remaining dataset conversion and encoder test have not started.
+The original release tag remains immutable. The cleaned code release is separate from dataset validation; a code tag does not certify pending full-episode results. Evidence is under `point_tracker/reports/REALPC_UNIFIED_1110/preflight_fix/`, `meshinit_preflight5/`, `meshinit_common_masks/` and `recovery_1111/`. The partial paired-frame comparison explicitly distinguishes newly visible depth pixels from the common comparison cohort. The remaining dataset conversion and encoder test have not started.
+
+## Cluster continuation
+
+Remaining work has moved to one sc GPU job (18438738), using the same frozen configuration and mesh-source initialization fix. The local PC only stages, archives and relays videos; no local conversion or encoder jobs are restarted. See CLUSTER.md.
