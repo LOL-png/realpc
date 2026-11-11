@@ -10,7 +10,7 @@ from .cloth_physics import extension_filter
 def step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,
          max_stretch=.02,endpoint_projection=False,rays=None,table_plane=None,
          metric_bounds=True,contact_projection=False,constraint_restore=False,
-         compression_soft=False,max_step=.002):
+         compression_soft=False,max_step=.002,conic=False):
     if contact is None or not max_stretch:raise ValueError('QP requires contact and a fixed metric bound')
     n=len(X);rest=np.linalg.norm(V0[E[:,0]]-V0[E[:,1]],axis=1)
     edge=X[E[:,0]]-X[E[:,1]];length=np.linalg.norm(edge,axis=1);directions=edge/length[:,None]
@@ -59,11 +59,16 @@ def step(X,V0,E,A,rhs,pi,pt,band=.02,stiffness=2000.,contact=None,
         constraints.append(sp.coo_matrix((cv,(cr,cc)),shape=(len(cl),3*n)).tocsr());low.append(np.array(cl));high.append(np.full(len(cl),np.inf))
     C=sp.vstack(constraints,format='csc');lo=np.concatenate(low);hi=np.concatenate(high)
     scale=max(float(np.max(abs(H.diagonal()))),1.)
-    solver=osqp.OSQP();solver.setup(P=sp.triu(H/scale,format='csc'),q=g/scale,A=C,l=lo,u=hi,verbose=False,eps_abs=1e-7,eps_rel=1e-5,max_iter=6000,polishing=True)
-    solved=solver.solve();info=dict(qp_status=solved.info.status,qp_iterations=int(solved.info.iter),qp_primal_residual=float(solved.info.prim_res))
+    if conic:
+        from .cloth_conic import solve
+        direction,info,ok=solve(H,g,C,lo,hi,X,E,rest,max_stretch)
+    else:
+        solver=osqp.OSQP();solver.setup(P=sp.triu(H/scale,format='csc'),q=g/scale,A=C,l=lo,u=hi,verbose=False,eps_abs=1e-7,eps_rel=1e-5,max_iter=6000,polishing=True)
+        solved=solver.solve();direction=solved.x;ok=solved.info.status_val in (1,2)
+        info=dict(qp_status=solved.info.status,qp_iterations=int(solved.info.iter),qp_primal_residual=float(solved.info.prim_res))
     result=X.copy()
-    if solved.info.status_val in (1,2):
-        candidate=X+solved.x.reshape(n,3);candidate,edge_alpha=extension_filter(X,candidate,V0,E,max_stretch);candidate=contact.filter(X,candidate)
+    if ok:
+        candidate=X+direction.reshape(n,3);candidate,edge_alpha=extension_filter(X,candidate,V0,E,max_stretch);candidate=contact.filter(X,candidate)
         info.update(edge_alpha=float(edge_alpha),ccd_alpha=float(contact.last_alpha))
         def energy(Y):
             ratios=np.linalg.norm(Y[E[:,0]]-Y[E[:,1]],axis=1)/rest

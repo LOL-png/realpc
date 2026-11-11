@@ -95,3 +95,17 @@ to numerical precision while retaining3.72mm mesh residual and the same physical
 checks; it takes19.4s. This avoids treating an initial wrong spatial match as a
 new rest metric. Trial126 tests both acquisitions and the first fold; no success
 is inferred from the one-frame result.
+
+## Exact upper-length subproblem
+`constraint_conic` together with `constraint_qp` uses Clarabel second-order cones
+to impose each Euclidean edge upper bound inside the quadratic subproblem.
+Lower length bounds remain linearized inner constraints; exact geometry and
+continuous collision checks still gate accepted motion. This removes the large
+post-solve shortening observed with linear upper bounds. Optional dependency
+and source: `requirements-cloth-qp.txt`, `realpc/cloth_conic.py`,
+[Clarabel Python API](https://clarabel.org/stable/python/getting_started_py/).
+Limit solver threads to1 and set `OPENBLAS_NUM_THREADS=1` for these small meshes.
+The175lift test with12steps of5mm takes6.27s, reaches the hard contact to numerical
+precision (8.79mm maximum across all soft grasp-region points), and retains
+edge ratios[.98200004,1.019000001]. Two-repeat regression passes exactly.
+Trial127 starts before acquisition with this solver; it is not yet promoted.

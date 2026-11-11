@@ -1,2 +1,5 @@
 # Optional joint constrained cloth solver experiment.
 osqp==1.1.3
+
+# Optional exact convex length bounds (constraint_conic)
+clarabel==0.11.1

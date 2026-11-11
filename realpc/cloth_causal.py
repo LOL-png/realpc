@@ -44,8 +44,8 @@ class CausalClothTracker:
         keys=inspect.signature(cls).parameters
         return cls(**{k:v for k,v in config.items() if k in keys})
 
-    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False, landmark_grasp=False, init_landmarks=False, native_init_gain=None, shirt_layers=2, init_registration_iters=0, init_registration_strain=50., init_registration_arap=.2, init_registration_data=8., init_registration_coverage=20., init_registration_bending=.2, init_registration_contour=80., init_registration_focus=1., feasible_predict=False, contact_clearance=0., contact_stiffness=1e9, shirt_asset=None, global_slide=False, contact_projection=False, constraint_restore=False, compression_soft=False, held_iters=0, held_step=.025, constraint_qp=False, grasp_init_iters=0):
-        self.constraint_qp=constraint_qp;self.qp_active=False
+    def __init__(self, cell=.010, arap=2., data=2., track=8., pin=35., wrists=False, dense=False, coverage=0., predict=False, plane=False, strain_limit=0., wrist_flow=False, template='tsdf', grasp_layers=False, cot_weight=0., cot_anchor='nearest', motion_scale=1., robust_depth=False, material_slack=1., layer_visibility=False, paired_grasp=False, length_slack=1., point_grasp=False, bending=0., gravity=0., joint_physics=False, strain_stiffness=2000., ipc_contact=False, max_stretch=0., idle_gate=False, endpoint_projection=False, dynamics=False, silhouette=False, flat_rest=False, coverage_radius=.045, init_iters=36, boundary_grasp=False, cot_rays_only=False, support_occlusion=False, table_contact=False, native_init_iters=15, dynamics_gain=1., back_on_table=False, visible_grasp=False, landmark_grasp=False, init_landmarks=False, native_init_gain=None, shirt_layers=2, init_registration_iters=0, init_registration_strain=50., init_registration_arap=.2, init_registration_data=8., init_registration_coverage=20., init_registration_bending=.2, init_registration_contour=80., init_registration_focus=1., feasible_predict=False, contact_clearance=0., contact_stiffness=1e9, shirt_asset=None, global_slide=False, contact_projection=False, constraint_restore=False, compression_soft=False, held_iters=0, held_step=.025, constraint_qp=False, grasp_init_iters=0, constraint_conic=False):
+        self.constraint_qp=constraint_qp;self.qp_active=False;self.constraint_conic=constraint_conic
         self.held_step=held_step
         self.held_iters=held_iters;self.grasp_init_iters=grasp_init_iters
         self.compression_soft=compression_soft
@@ -74,7 +74,7 @@ class CausalClothTracker:
         # Never replace their rest metric or material/sample identities.
         for key,value in dict(shirt_asset=None,global_slide=False,
                 contact_projection=False,constraint_restore=False,
-                compression_soft=False,held_iters=0,held_step=.025,constraint_qp=False,qp_active=False,grasp_init_iters=0).items():
+                compression_soft=False,held_iters=0,held_step=.025,constraint_qp=False,qp_active=False,grasp_init_iters=0,constraint_conic=False).items():
             self.__dict__.setdefault(key,value)
 
     def cot_constraints(self,f,v,X):
@@ -621,7 +621,7 @@ class CausalClothTracker:
                 if self.cot_rays_only and self.ray_observations:
                     ri,off,centers,dirs,rw=[np.concatenate([obs[j] for obs in self.ray_observations]) for j in range(5)]
                     rays=(ri,centers-np.einsum('nij,nj->ni',R[ri],off),dirs,rw)
-                X=joint_step(X,self.cm.V0,E,A,rhs,hi,ht,self.strain_limit,self.strain_stiffness,self.ipc_state if self.ipc_contact else None,self.max_stretch,self.endpoint_projection,rays=rays,table_plane=getattr(self,'table_plane',None),metric_bounds=bool(self.shirt_asset),contact_projection=self.contact_projection,constraint_restore=self.constraint_restore,compression_soft=self.compression_soft,max_step=self.held_step if len(pi) else .025)
+                X=joint_step(X,self.cm.V0,E,A,rhs,hi,ht,self.strain_limit,self.strain_stiffness,self.ipc_state if self.ipc_contact else None,self.max_stretch,self.endpoint_projection,rays=rays,table_plane=getattr(self,'table_plane',None),metric_bounds=bool(self.shirt_asset),contact_projection=self.contact_projection,constraint_restore=self.constraint_restore,compression_soft=self.compression_soft,max_step=self.held_step if len(pi) else .025,**({"conic":self.constraint_conic} if self.constraint_qp and self.qp_active else {}))
             else:X=sla.spsolve(A.tocsc(),rhs)
             if self.strain_limit and not self.joint_physics and not self.dynamics:X=self.project_strain(X,hi,ht)
             if self.template=='shirt' and not self.ipc_contact and not self.dynamics:
